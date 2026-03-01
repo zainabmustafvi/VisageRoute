@@ -14,6 +14,13 @@ Graceful 429s: When rate-limiting kicks in, the UI must show a "Too many attempt
 
 Sanitization Feedback: If a user enters invalid characters in a name field, the UI should highlight the field in red before the data even reaches the Node.js server.
 
+"I am providing the HTML/CSS code for my VisageRoute UI. Please analyze this code to:
+
+Identify the color palette, typography, and spacing used.
+
+Create a Theme.js file for React Native that reflects this design.
+
+Reconstruct the Admin, Driver, and Parent modules using React Native components while maintaining the exact visual layout and branding found in this HTML."
 below is the stitch code for the UI:
 
 SPLASH SCREEN:
