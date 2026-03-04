@@ -4,13 +4,18 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 
 // Security Middleware
 app.use(helmet()); // Sets generic security-related HTTP headers
-app.use(cors());
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:8081', // Adjust based on React Native IP
+  credentials: true // Crucial for receiving cookies from the client
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 // Strict Rate Limiting (Security Hardening)
 const limiter = rateLimit({
@@ -21,6 +26,10 @@ const limiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 app.use('/api', limiter);
+
+// Routes
+const authRoutes = require('./routes/authRoutes');
+app.use('/api/auth', authRoutes);
 
 // Placeholder routes
 app.get('/', (req, res) => {
