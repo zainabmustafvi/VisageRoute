@@ -29,7 +29,10 @@ app.use('/api', limiter);
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Placeholder routes
 app.get('/', (req, res) => {

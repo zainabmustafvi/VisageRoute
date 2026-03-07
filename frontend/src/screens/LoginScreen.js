@@ -6,8 +6,8 @@ import * as SecureStore from 'expo-secure-store';
 import Theme from '../theme/Theme';
 import { globalStyles } from '../theme/globalStyles';
 
-// For Android Emulator, localhost is 10.0.2.2. For physical devices, you must use your machine's local Wi-Fi IP (e.g. 192.168.1.x)
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api/auth' : 'http://localhost:5000/api/auth';
+// For physical devices or Expo testing, point this to your machine's Wi-Fi IP Address
+const API_URL = 'http://192.168.0.105:5000/api/auth';
 
 const LoginScreen = ({ navigation }) => {
     const [role, setRole] = useState('parent');
