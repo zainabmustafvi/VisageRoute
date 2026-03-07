@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
+const mongoSanitize = require('express-mongo-sanitize');
 
 const app = express();
 
@@ -16,6 +17,9 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+
+// Data Sanitization against NoSQL query injection
+app.use(mongoSanitize());
 
 // Strict Rate Limiting (Security Hardening)
 const limiter = rateLimit({
@@ -30,9 +34,11 @@ app.use('/api', limiter);
 // Routes
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const driverRoutes = require('./routes/driverRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/driver', driverRoutes);
 
 // Placeholder routes
 app.get('/', (req, res) => {
