@@ -50,9 +50,11 @@ const LoginScreen = ({ navigation }) => {
         } catch (error) {
             // 5. Security Feedback Handling
             if (error.response && error.response.status === 401) {
-                setErrorMsg('Invalid credentials'); // Generic error as requested
+                setErrorMsg('Invalid credentials. Please verify your User ID and Password.'); // Generic error as requested
             } else if (error.response && error.response.status === 429) {
-                setErrorMsg('Too many attempts, please wait.'); // Graceful rate limit handling
+                // Read the specific error message provided by our express-rate-limit backend
+                const backendMsg = error.response.data.error || 'Too many attempts.';
+                setErrorMsg(`Security Alert: ${backendMsg} The login button is temporarily disabled.`);
             } else {
                 setErrorMsg('Network error. Ensure backend is running.');
             }
@@ -139,9 +141,9 @@ const LoginScreen = ({ navigation }) => {
 
                     {/* Submit Button */}
                     <TouchableOpacity
-                        style={globalStyles.primaryButton}
+                        style={[globalStyles.primaryButton, (loading || errorMsg.includes('Security Alert')) && { opacity: 0.5 }]}
                         onPress={handleLogin}
-                        disabled={loading}
+                        disabled={loading || errorMsg.includes('Security Alert')}
                     >
                         <Text style={globalStyles.primaryButtonText}>
                             {loading ? 'Authenticating...' : 'Log In'}
