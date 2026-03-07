@@ -16,6 +16,18 @@ const LoginScreen = ({ navigation }) => {
     const [showPassword, setShowPassword] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [loading, setLoading] = useState(false);
+    const [illegalCharWarning, setIllegalCharWarning] = useState(false);
+
+    // OWASP - Input Sanitization check (Real-time feedback)
+    const handleInputChange = (text, setter) => {
+        // Simple check for illegal NoSQL characters: $ . { }
+        if (/[\$\.\{\}]/.test(text)) {
+            setIllegalCharWarning(true);
+        } else {
+            setIllegalCharWarning(false);
+        }
+        setter(text);
+    };
 
     const handleLogin = async () => {
         // 1. Basic Frontend Validation
@@ -23,6 +35,12 @@ const LoginScreen = ({ navigation }) => {
             setErrorMsg('Please enter both User ID and Password.');
             return;
         }
+
+        if (illegalCharWarning) {
+            setErrorMsg('Security Block: Invalid characters detected in input.');
+            return;
+        }
+
         setErrorMsg('');
         setLoading(true);
 
@@ -83,6 +101,7 @@ const LoginScreen = ({ navigation }) => {
 
                     {/* Error Message */}
                     {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                    {illegalCharWarning ? <Text style={styles.errorText}>Warning: Illegal characters ($, ., {, }) are not allowed.</Text> : null}
 
                     {/* Role Selection */}
                     <View style={styles.roleContainer}>
@@ -107,10 +126,13 @@ const LoginScreen = ({ navigation }) => {
                         <View style={styles.inputWrapper}>
                             <MaterialIcons name="person" size={20} color={Theme.colors.textSecondaryLight} style={styles.inputIcon} />
                             <TextInput
-                                style={[globalStyles.input, { paddingLeft: 44, borderColor: errorMsg ? Theme.colors.error : Theme.colors.borderLight }]}
+                                style={[
+                                    globalStyles.input,
+                                    { paddingLeft: 44, borderColor: errorMsg || illegalCharWarning ? Theme.colors.error : Theme.colors.borderLight }
+                                ]}
                                 placeholder="Enter User ID"
                                 value={userId}
-                                onChangeText={setUserId}
+                                onChangeText={(text) => handleInputChange(text, setUserId)}
                                 autoCapitalize="none"
                                 placeholderTextColor={Theme.colors.textSecondaryLight}
                             />
@@ -126,11 +148,14 @@ const LoginScreen = ({ navigation }) => {
                         <View style={styles.inputWrapper}>
                             <MaterialIcons name="lock" size={20} color={Theme.colors.textSecondaryLight} style={styles.inputIcon} />
                             <TextInput
-                                style={[globalStyles.input, { paddingLeft: 44, paddingRight: 44, borderColor: errorMsg ? Theme.colors.error : Theme.colors.borderLight }]}
+                                style={[
+                                    globalStyles.input,
+                                    { paddingLeft: 44, paddingRight: 44, borderColor: errorMsg || illegalCharWarning ? Theme.colors.error : Theme.colors.borderLight }
+                                ]}
                                 placeholder="••••••••"
                                 secureTextEntry={!showPassword}
                                 value={password}
-                                onChangeText={setPassword}
+                                onChangeText={(text) => handleInputChange(text, setPassword)}
                                 placeholderTextColor={Theme.colors.textSecondaryLight}
                             />
                             <TouchableOpacity style={styles.eyeIcon} onPress={() => setShowPassword(!showPassword)}>
