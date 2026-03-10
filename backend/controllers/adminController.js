@@ -102,6 +102,28 @@ const createBusRoute = async (req, res) => {
     }
 };
 
+// @desc    Update bus route schedule
+// @route   PUT /api/admin/routes/:id/schedule
+// @access  Private/Admin
+const updateRouteSchedule = async (req, res) => {
+    try {
+        const { schedule, status } = req.body;
+
+        const route = await BusRoute.findById(req.params.id);
+        if (!route) {
+            return res.status(404).json({ error: 'Route not found' });
+        }
+
+        if (schedule) route.schedule = { ...route.schedule, ...schedule };
+        if (status) route.status = status;
+
+        await route.save();
+        res.json(route);
+    } catch (err) {
+        res.status(500).json({ error: 'Server Error updating schedule' });
+    }
+};
+
 module.exports = {
     getStudents,
     createStudent,
@@ -109,4 +131,5 @@ module.exports = {
     createDriver,
     getBusRoutes,
     createBusRoute,
+    updateRouteSchedule,
 };
