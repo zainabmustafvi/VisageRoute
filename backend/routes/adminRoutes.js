@@ -11,7 +11,8 @@ const {
     getDrivers,
     createDriver,
     getBusRoutes,
-    createBusRoute
+    createBusRoute,
+    updateRouteSchedule
 } = require('../controllers/adminController');
 
 // All admin routes must be protected and restricted to the 'admin' role
@@ -32,5 +33,9 @@ router.route('/drivers')
 router.route('/routes')
     .get(getBusRoutes)
     .post(validateSchema(busRouteSchema), createBusRoute);
+
+// Update Schedule
+// We don't apply the full busRouteSchema because this is a partial update focused on schedule
+router.put('/routes/:id/schedule', updateRouteSchedule);
 
 module.exports = router;
