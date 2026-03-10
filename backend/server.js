@@ -7,7 +7,14 @@ const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const mongoSanitize = require('express-mongo-sanitize');
 
+const http = require('http');
+const { initSocket } = require('./config/socket');
+
 const app = express();
+const server = http.createServer(app);
+
+// Initialize Socket.io securely
+initSocket(server);
 
 // Security Middleware
 app.use(helmet()); // Sets generic security-related HTTP headers
@@ -52,6 +59,6 @@ const MONGO_URI = process.env.MONGO_URI;
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('Connected to MongoDB Atlas');
-    app.listen(PORT, () => console.log(`Server running securely on port ${PORT}`));
+    server.listen(PORT, () => console.log(`Server and Socket.io running securely on port ${PORT}`));
   })
   .catch((error) => console.error('MongoDB connection error:', error));

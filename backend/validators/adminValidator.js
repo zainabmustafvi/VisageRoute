@@ -20,6 +20,11 @@ const busRouteSchema = z.object({
     routeName: z.string().min(3).max(50).trim(),
     driverId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
     capacity: z.number().int().positive().max(100, "Capacity cannot exceed 100"),
+    schedule: z.object({
+        departureTime: z.string().optional(),
+        estimatedArrivalTime: z.string().optional(),
+    }).optional(),
+    status: z.enum(['Scheduled', 'In Transit', 'Completed', 'Delayed']).optional(),
 });
 
 // Generic Validation Middleware

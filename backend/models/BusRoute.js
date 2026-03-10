@@ -14,8 +14,13 @@ const busRouteSchema = new mongoose.Schema({
         required: false, // Driver can be assigned later
     },
     schedule: {
-        departureTime: String,
-        arrivalTime: String,
+        departureTime: { type: String, default: 'Not Set' },
+        estimatedArrivalTime: { type: String, default: 'Not Set' },
+    },
+    status: {
+        type: String,
+        enum: ['Scheduled', 'In Transit', 'Completed', 'Delayed'],
+        default: 'Scheduled'
     }
 }, { timestamps: true });
 
