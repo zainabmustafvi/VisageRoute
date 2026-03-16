@@ -52,13 +52,19 @@ const LoginScreen = ({ navigation }) => {
                 role
             });
 
-            // 3. Store user data/token (Fallback if cookies are tricky in RN)
-            // Since it's React Native, cookies from Axios exist but SecureStore is safer for persistent sessions
+            // 3. Store user data securely
             if (response.data.user) {
-                // Securely store role to redirect next time without login
                 await SecureStore.setItemAsync('userRole', response.data.user.role);
 
-                // 4. Role-based Navigation mapping
+                // Also extract + store the JWT token for Socket.io auth
+                // The server sets it as an HTTP-only cookie named 'token'
+                const setCookie = response.headers?.['set-cookie']?.[0] || '';
+                if (setCookie.includes('token=')) {
+                    const token = setCookie.split('token=')[1].split(';')[0];
+                    await SecureStore.setItemAsync('socketToken', token);
+                }
+
+                // 4. Role-based Navigation
                 switch (response.data.user.role) {
                     case 'admin': navigation.replace('AdminHome'); break;
                     case 'driver': navigation.replace('DriverHome'); break;
@@ -101,7 +107,7 @@ const LoginScreen = ({ navigation }) => {
 
                     {/* Error Message */}
                     {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
-                    {illegalCharWarning ? <Text style={styles.errorText}>Warning: Illegal characters ($, ., {, }) are not allowed.</Text> : null}
+                    {illegalCharWarning ? <Text style={styles.errorText}>Warning: Illegal characters ($, ., {'{'}, {'}'}) are not allowed.</Text> : null}
 
                     {/* Role Selection */}
                     <View style={styles.roleContainer}>

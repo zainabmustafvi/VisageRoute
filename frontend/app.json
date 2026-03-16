@@ -26,7 +26,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow VisageRoute to use your location to track bus routes.",
+          "locationWhenInUsePermission": "Allow VisageRoute to use your location."
+        }
+      ]
     ]
   }
 }
