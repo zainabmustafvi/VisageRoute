@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator
+    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator, Platform
 } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -11,7 +11,7 @@ import Theme from '../theme/Theme';
 import { globalStyles } from '../theme/globalStyles';
 
 // ⚠️ Update to your machine's IP on the same Wi-Fi network
-const SOCKET_URL = 'http://192.168.0.105:5000';
+const SOCKET_URL = 'http://192.168.0.106:5000';
 
 // Placeholder: In production, fetch the child's assigned routeId from the API
 const CHILD_ROUTE_ID = '000000000000000000000001';
@@ -138,46 +138,56 @@ const ParentHome = ({ navigation }) => {
 
             {/* Map */}
             <View style={styles.mapContainer}>
-                <MapView
-                    ref={mapRef}
-                    style={StyleSheet.absoluteFillObject}
-                    provider={PROVIDER_DEFAULT}
-                    initialRegion={defaultRegion}
-                    showsUserLocation={false}
-                    showsMyLocationButton={false}
-                >
-                    {/* Driver / Bus Marker */}
-                    {driverLocation && (
-                        <Marker
-                            coordinate={{ latitude: driverLocation.lat, longitude: driverLocation.lng }}
-                            title="Bus Location"
-                            description={`ETA: ~${eta} minutes`}
-                        >
-                            <View style={styles.busMarker}>
-                                <MaterialIcons name="directions-bus" size={20} color={Theme.colors.brandGrey} />
-                            </View>
-                        </Marker>
-                    )}
-
-                    {/* Parent / Home Marker */}
-                    {myLocation && (
-                        <Marker
-                            coordinate={{ latitude: myLocation.lat, longitude: myLocation.lng }}
-                            title="Your Location"
-                        >
-                            <View style={styles.homeMarker}>
-                                <MaterialIcons name="home" size={20} color="white" />
-                            </View>
-                        </Marker>
-                    )}
-                </MapView>
-
-                {/* Overlay when no driver yet */}
-                {!driverLocation && (
-                    <View style={styles.mapOverlay}>
-                        <ActivityIndicator size="large" color={Theme.colors.primary} />
-                        <Text style={styles.overlayText}>Waiting for live bus location...</Text>
+                {Platform.OS === 'web' ? (
+                    <View style={styles.mapPlaceholder}>
+                        <MaterialIcons name="map" size={48} color={Theme.colors.textSecondaryLight} />
+                        <Text style={styles.overlayText}>Live Map is only available on Android/iOS devices.</Text>
+                        <Text style={[styles.overlayText, { fontSize: 12 }]}>Open VisageRoute in Expo Go to see the live tracking.</Text>
                     </View>
+                ) : (
+                    <>
+                        <MapView
+                            ref={mapRef}
+                            style={StyleSheet.absoluteFillObject}
+                            provider={PROVIDER_DEFAULT}
+                            initialRegion={defaultRegion}
+                            showsUserLocation={false}
+                            showsMyLocationButton={false}
+                        >
+                            {/* Driver / Bus Marker */}
+                            {driverLocation && (
+                                <Marker
+                                    coordinate={{ latitude: driverLocation.lat, longitude: driverLocation.lng }}
+                                    title="Bus Location"
+                                    description={`ETA: ~${eta} minutes`}
+                                >
+                                    <View style={styles.busMarker}>
+                                        <MaterialIcons name="directions-bus" size={20} color={Theme.colors.brandGrey} />
+                                    </View>
+                                </Marker>
+                            )}
+
+                            {/* Parent / Home Marker */}
+                            {myLocation && (
+                                <Marker
+                                    coordinate={{ latitude: myLocation.lat, longitude: myLocation.lng }}
+                                    title="Your Location"
+                                >
+                                    <View style={styles.homeMarker}>
+                                        <MaterialIcons name="home" size={20} color="white" />
+                                    </View>
+                                </Marker>
+                            )}
+                        </MapView>
+
+                        {/* Overlay when no driver yet */}
+                        {!driverLocation && (
+                            <View style={styles.mapOverlay}>
+                                <ActivityIndicator size="large" color={Theme.colors.primary} />
+                                <Text style={styles.overlayText}>Waiting for live bus location...</Text>
+                            </View>
+                        )}
+                    </>
                 )}
             </View>
         </SafeAreaView>
@@ -284,10 +294,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 16,
     },
+    mapPlaceholder: {
+        flex: 1,
+        backgroundColor: Theme.colors.borderLight,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+        gap: 12,
+    },
     overlayText: {
         fontSize: Theme.typography.sizes.base,
         color: Theme.colors.textSecondaryLight,
         fontWeight: '500',
+        textAlign: 'center',
     },
 });
 

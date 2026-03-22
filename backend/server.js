@@ -19,8 +19,10 @@ initSocket(server);
 // Security Middleware
 app.use(helmet()); // Sets generic security-related HTTP headers
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:8081', // Adjust based on React Native IP
-  credentials: true // Crucial for receiving cookies from the client
+  // In development, React Native on a physical device sends requests from its IP.
+  // We allow all origins in dev and will tighten to a specific domain in production.
+  origin: process.env.NODE_ENV === 'production' ? process.env.CLIENT_URL : true,
+  credentials: true
 }));
 app.use(express.json());
 app.use(cookieParser());

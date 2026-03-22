@@ -10,7 +10,7 @@ import Theme from '../theme/Theme';
 import { globalStyles } from '../theme/globalStyles';
 
 // ⚠️ Update to your machine's IP on the same Wi-Fi network
-const SOCKET_URL = 'http://192.168.0.105:5000';
+const SOCKET_URL = 'http://192.168.0.106:5000';
 
 // Placeholder route ID — in production this comes from the driver's profile API
 const DRIVER_ROUTE_ID = '000000000000000000000001';
