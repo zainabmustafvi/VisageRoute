@@ -32,7 +32,7 @@ SPLASH SCREEN:
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>SafeRoute Splash Screen</title>
+<title> Splash Screen</title>
 <!-- Google Fonts -->
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -113,7 +113,7 @@ SPLASH SCREEN:
 <div class="flex flex-col items-center animate-text text-center">
 <!-- App Name -->
 <h1 class="text-brand-grey tracking-tight text-4xl font-extrabold leading-tight mb-2">
-                    SafeRoute
+                    
                 </h1>
 <!-- Tagline -->
 <p class="text-brand-grey/80 text-lg font-medium leading-relaxed max-w-[240px]">
@@ -152,7 +152,7 @@ LOGIN SCREEN:
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>SafeRoute Login</title>
+<title> Login</title>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script id="tailwind-config">
@@ -200,7 +200,7 @@ LOGIN SCREEN:
 <div class="mb-2 flex items-center justify-center h-16 w-16 rounded-full bg-primary text-[#1c190d] shadow-lg">
 <span class="material-symbols-outlined text-4xl">directions_bus</span>
 </div>
-<h1 class="text-[#1c190d] dark:text-white tracking-tight text-3xl font-bold leading-tight">SafeRoute</h1>
+<h1 class="text-[#1c190d] dark:text-white tracking-tight text-3xl font-bold leading-tight"></h1>
 <p class="text-[#1c190d]/70 dark:text-white/70 text-sm font-medium mt-1">Track your campus ride</p>
 </div>
 </div>
@@ -285,7 +285,7 @@ ADMIN SCREENS:
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>SafeRoute - Admin Announcement</title>
+<title> - Admin Announcement</title>
 <!-- Material Symbols -->
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <!-- Google Fonts -->
@@ -469,7 +469,7 @@ ADMIN SCREENS:
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Admin Register Driver - SafeRoute</title>
+<title>Admin Register Driver - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script id="tailwind-config">
         tailwind.config = {
@@ -541,7 +541,7 @@ ADMIN SCREENS:
 </label>
 <label class="flex flex-col w-full">
 <span class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Email Address</span>
-<input class="form-input w-full rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:border-primary focus:ring-primary h-12 px-4 placeholder-gray-400 text-base" placeholder="driver@saferoute.edu" type="email"/>
+<input class="form-input w-full rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:border-primary focus:ring-primary h-12 px-4 placeholder-gray-400 text-base" placeholder="driver@.edu" type="email"/>
 </label>
 <label class="flex flex-col w-full">
 <span class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Employee ID</span>
@@ -782,7 +782,7 @@ ADMIN SCREENS:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Admin Driver List &amp; Management - SafeRoute</title>
+<title>Admin Driver List &amp; Management - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -847,7 +847,7 @@ ADMIN SCREENS:
 <span class="material-symbols-outlined text-2xl group-hover:text-yellow-600">menu</span>
 </button>
 <div>
-<h1 class="font-bold text-lg leading-none text-gray-900">SafeRoute</h1>
+<h1 class="font-bold text-lg leading-none text-gray-900"></h1>
 <p class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">Driver Management</p>
 </div>
 </div>
@@ -990,7 +990,7 @@ ADMIN SCREENS:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Admin Bus List &amp; Management - SafeRoute</title>
+<title>Admin Bus List &amp; Management - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -1050,7 +1050,7 @@ ADMIN SCREENS:
 <span class="material-symbols-outlined text-2xl group-hover:text-yellow-600">menu</span>
 </button>
 <div>
-<h1 class="font-bold text-lg leading-none text-gray-900">SafeRoute</h1>
+<h1 class="font-bold text-lg leading-none text-gray-900"></h1>
 <p class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">Admin Portal</p>
 </div>
 </div>
@@ -1204,7 +1204,7 @@ ADMIN SCREENS:
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Admin Register Student - SafeRoute</title>
+<title>Admin Register Student - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
@@ -1406,7 +1406,7 @@ ADMIN SCREENS:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Admin Register New Bus - SafeRoute</title>
+<title>Admin Register New Bus - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -1466,7 +1466,7 @@ ADMIN SCREENS:
 <span class="material-symbols-outlined text-2xl group-hover:text-yellow-600">menu</span>
 </button>
 <div>
-<h1 class="font-bold text-lg leading-none text-gray-900">SafeRoute</h1>
+<h1 class="font-bold text-lg leading-none text-gray-900"></h1>
 <p class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">Admin Portal</p>
 </div>
 </div>
@@ -1577,7 +1577,7 @@ ADMIN SCREENS:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Admin Dashboard - SafeRoute</title>
+<title>Admin Dashboard - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -1638,7 +1638,7 @@ ADMIN SCREENS:
 <span class="text-xs font-bold uppercase tracking-wide">Logout</span>
 </button>
 <div>
-<h1 class="font-bold text-lg leading-none text-gray-900">SafeRoute</h1>
+<h1 class="font-bold text-lg leading-none text-gray-900"></h1>
 <p class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">Admin Portal</p>
 </div>
 </div>
@@ -1765,7 +1765,7 @@ ADMIN SCREENS:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Admin Update Bus - SafeRoute</title>
+<title>Admin Update Bus - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -2135,7 +2135,7 @@ ADMIN SCREENS:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Admin Student View Details - SafeRoute</title>
+<title>Admin Student View Details - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -2343,7 +2343,7 @@ ADMIN SCREENS:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Student Management - SafeRoute</title>
+<title>Student Management - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -2954,7 +2954,7 @@ DRIVER SCREEN:
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>SafeRoute Login - Driver</title>
+<title> Login - Driver</title>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script id="tailwind-config">
@@ -2997,7 +2997,7 @@ DRIVER SCREEN:
 <div class="mb-2 flex items-center justify-center h-16 w-16 rounded-full bg-primary text-[#1c190d] shadow-lg">
 <span class="material-symbols-outlined text-4xl">directions_bus</span>
 </div>
-<h1 class="text-[#1c190d] dark:text-white tracking-tight text-3xl font-bold leading-tight">SafeRoute</h1>
+<h1 class="text-[#1c190d] dark:text-white tracking-tight text-3xl font-bold leading-tight"></h1>
 <p class="text-[#1c190d]/70 dark:text-white/70 text-sm font-medium mt-1">Track your campus ride</p>
 </div>
 </div>
@@ -3376,7 +3376,7 @@ PARENT SCREEN:
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Parent Announcements - SafeRoute</title>
+<title>Parent Announcements - </title>
 <!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <!-- Theme Configuration -->
@@ -3566,7 +3566,7 @@ PARENT SCREEN:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Parent Track Bus - SafeRoute</title>
+<title>Parent Track Bus - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -3784,7 +3784,7 @@ PARENT SCREEN:
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>SafeRoute Login</title>
+<title> Login</title>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script id="tailwind-config">
@@ -3832,7 +3832,7 @@ PARENT SCREEN:
 <div class="mb-2 flex items-center justify-center h-16 w-16 rounded-full bg-primary text-[#1c190d] shadow-lg">
 <span class="material-symbols-outlined text-4xl">directions_bus</span>
 </div>
-<h1 class="text-[#1c190d] dark:text-white tracking-tight text-3xl font-bold leading-tight">SafeRoute</h1>
+<h1 class="text-[#1c190d] dark:text-white tracking-tight text-3xl font-bold leading-tight"></h1>
 <p class="text-[#1c190d]/70 dark:text-white/70 text-sm font-medium mt-1">Track your campus ride</p>
 </div>
 </div>
@@ -3907,7 +3907,7 @@ PARENT SCREEN:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Parent Manage Notifications - SafeRoute</title>
+<title>Parent Manage Notifications - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -4100,7 +4100,7 @@ PARENT SCREEN:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Parent Profile Screen - SafeRoute</title>
+<title>Parent Profile Screen - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -4274,7 +4274,7 @@ PARENT SCREEN:
 </button>
 </div>
 </section>
-<p class="text-center text-[10px] text-gray-400 mt-8 mb-4">SafeRoute App v2.4.0 (Build 2024)</p>
+<p class="text-center text-[10px] text-gray-400 mt-8 mb-4"> App v2.4.0 (Build 2024)</p>
 </main>
 <nav class="bg-white border-t border-gray-100 flex justify-between items-start px-2 py-3 pb-8 z-50 w-full shrink-0 shadow-[0_-8px_30px_rgba(0,0,0,0.02)]">
 <a class="flex-1 flex flex-col items-center gap-1 group w-16 text-gray-400 hover:text-yellow-600 transition-colors" href="#">
@@ -4307,7 +4307,7 @@ PARENT SCREEN:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Parent Schedule - SafeRoute</title>
+<title>Parent Schedule - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -4367,7 +4367,7 @@ PARENT SCREEN:
 <span class="material-symbols-outlined text-2xl group-hover:text-yellow-600">menu</span>
 </button>
 <div>
-<h1 class="font-bold text-lg leading-none text-gray-900">SafeRoute</h1>
+<h1 class="font-bold text-lg leading-none text-gray-900"></h1>
 <p class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">Parent Portal</p>
 </div>
 </div>
@@ -4605,7 +4605,7 @@ PARENT SCREEN:
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Parent Dashboard - SafeRoute</title>
+<title>Parent Dashboard - </title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -4668,7 +4668,7 @@ PARENT SCREEN:
 <span class="material-symbols-outlined text-2xl group-hover:text-yellow-600">menu</span>
 </button>
 <div>
-<h1 class="font-bold text-lg leading-none text-gray-900">SafeRoute</h1>
+<h1 class="font-bold text-lg leading-none text-gray-900"></h1>
 <p class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">Parent Portal</p>
 </div>
 </div>

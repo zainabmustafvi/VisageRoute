@@ -37,11 +37,14 @@
 **Goal:** Develop the Admin and Driver CRUD operations while applying strict validation and network-layer defenses.
 
 ### Week 1: Admin Module & Input Validation
-- [ ] **Admin Backend APIs:** Create CRUD endpoints for Students, Drivers, and Bus Profiles.
-- [ ] **Strict Input Validation (Joi/Zod):**
+- [ ] **Admin Home Screen:** Implement dashboard with stats (Active Buses, Drivers, Students) and quick actions.
+- [ ] **Admin Backend APIs & CRUD:** Create full CRUD endpoints for Students, Drivers, and Bus Profiles.
+- [ ] **Announcement Feature:** Implement Admin-only broadcast API and frontend creation screen.
+- [ ] **Bottom Navigation:** Setup Admin-specific tab navigation (Home, Bus, Student, Driver, Alerts).
+- [ ] **Strict Input Validation (Zod):**
   - Implement strict schema-based validation for all incoming requests.
-  - Reject unexpected fields (no polluting the database).
-  - Enforce type checks and strict length limits (crucial for student/bus registration forms).
+  - Reject unexpected fields.
+  - Enforce type checks and strict length limits for registration forms.
 
 ### Week 2: Rate Limiting & Network Security
 - [ ] **API Rate Limiting (`express-rate-limit`):**
