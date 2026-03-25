@@ -33,7 +33,8 @@
           "locationAlwaysAndWhenInUsePermission": "Allow VisageRoute to use your location to track bus routes.",
           "locationWhenInUsePermission": "Allow VisageRoute to use your location."
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }
