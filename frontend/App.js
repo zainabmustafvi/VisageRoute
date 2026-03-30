@@ -16,6 +16,11 @@ import AdminUploadSchedule from './src/screens/AdminUploadSchedule';
 import AdminBusDetail from './src/screens/AdminBusDetail';
 import AdminStudentDetail from './src/screens/AdminStudentDetail';
 import AdminDriverDetail from './src/screens/AdminDriverDetail';
+import ParentTrackBus from './src/screens/ParentTrackBus';
+import ParentSchedule from './src/screens/ParentSchedule';
+import ParentProfile from './src/screens/ParentProfile';
+import ParentNotifications from './src/screens/ParentNotifications';
+import ParentAnnouncements from './src/screens/ParentAnnouncements';
 
 const Stack = createNativeStackNavigator();
 
@@ -44,6 +49,11 @@ export default function App() {
           <Stack.Screen name="AdminDriverDetail" component={AdminDriverDetail} />
           <Stack.Screen name="DriverHome" component={DriverHome} />
           <Stack.Screen name="ParentHome" component={ParentHome} />
+          <Stack.Screen name="ParentTrackBus" component={ParentTrackBus} />
+          <Stack.Screen name="ParentSchedule" component={ParentSchedule} />
+          <Stack.Screen name="ParentProfile" component={ParentProfile} />
+          <Stack.Screen name="ParentNotifications" component={ParentNotifications} />
+          <Stack.Screen name="ParentAnnouncements" component={ParentAnnouncements} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
