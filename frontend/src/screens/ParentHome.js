@@ -1,194 +1,176 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator, Platform
+    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Image, Platform
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
-import * as Location from 'expo-location';
-import * as SecureStore from 'expo-secure-store';
-import { io } from 'socket.io-client';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 import Theme from '../theme/Theme';
-import { globalStyles } from '../theme/globalStyles';
-
-// ⚠️ Update to your machine's IP on the same Wi-Fi network
-const SOCKET_URL = 'http://192.168.0.106:5000';
-
-// Placeholder: In production, fetch the child's assigned routeId from the API
-const CHILD_ROUTE_ID = '000000000000000000000001';
 
 const ParentHome = ({ navigation }) => {
-    const [driverLocation, setDriverLocation] = useState(null);
-    const [myLocation, setMyLocation] = useState(null);
-    const [eta, setEta] = useState(null);
-    const [tripStatus, setTripStatus] = useState('Waiting for driver to start trip...');
-    const [connected, setConnected] = useState(false);
-    const socketRef = useRef(null);
-    const mapRef = useRef(null);
-
+    
     const handleLogout = async () => {
-        if (socketRef.current) socketRef.current.disconnect();
         await SecureStore.deleteItemAsync('userRole');
         navigation.replace('Login');
     };
 
-    useEffect(() => {
-        let socket;
-
-        const setupTracking = async () => {
-            // 1. Request location permission to show parent's own position
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') {
-                const loc = await Location.getCurrentPositionAsync({});
-                setMyLocation({
-                    lat: loc.coords.latitude,
-                    lng: loc.coords.longitude,
-                });
-            }
-
-            // 2. Connect to socket with stored JWT
-            const token = await SecureStore.getItemAsync('socketToken');
-            if (!token) {
-                Alert.alert('Session Error', 'Please log in again.');
-                navigation.replace('Login');
-                return;
-            }
-
-            socket = io(SOCKET_URL, {
-                auth: { token },
-                transports: ['websocket'],
-            });
-
-            socket.on('connect', () => {
-                console.log('[Parent Socket] Connected:', socket.id);
-                setConnected(true);
-                // Join route room to receive driver's location updates
-                socket.emit('joinRouteRoom', CHILD_ROUTE_ID);
-            });
-
-            socket.on('connect_error', (err) => {
-                console.error('[Parent Socket] Error:', err.message);
-                setTripStatus('⚠️ Could not connect to server. Check your network.');
-            });
-
-            // 3. Listen for live location updates from the driver
-            socket.on('locationUpdate', ({ driverLocation: loc, eta: etaMin }) => {
-                setDriverLocation(loc);
-                setEta(etaMin);
-                setTripStatus('🚌 Bus is on the way!');
-
-                // Auto-animate map to fit both markers
-                if (mapRef.current && myLocation) {
-                    mapRef.current.fitToCoordinates(
-                        [
-                            { latitude: loc.lat, longitude: loc.lng },
-                            { latitude: myLocation.lat, longitude: myLocation.lng },
-                        ],
-                        { edgePadding: { top: 80, right: 60, bottom: 80, left: 60 }, animated: true }
-                    );
-                }
-            });
-
-            // 4. Listen for trip completion
-            socket.on('tripEnded', ({ message }) => {
-                setTripStatus(`✅ ${message}`);
-                setEta(null);
-            });
-
-            socketRef.current = socket;
-        };
-
-        setupTracking();
-
-        return () => {
-            if (socket) socket.disconnect();
-        };
-    }, []);
-
-    const defaultRegion = {
-        latitude: myLocation?.lat || 24.8607,
-        longitude: myLocation?.lng || 67.0011,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-    };
+    const QuickAccessItem = ({ icon, title, subtitle, color, onPress }) => (
+        <TouchableOpacity style={styles.qaItem} onPress={onPress}>
+            <View style={styles.qaLeft}>
+                <View style={[styles.qaIconContainer, { backgroundColor: `${color}15` }]}>
+                    <MaterialIcons name={icon} size={24} color={color} />
+                </View>
+                <View>
+                    <Text style={styles.qaTitle}>{title}</Text>
+                    <Text style={styles.qaSubtitle}>{subtitle}</Text>
+                </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color="#d1d5db" />
+        </TouchableOpacity>
+    );
 
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <MaterialIcons name="child-care" size={28} color={Theme.colors.brandGrey} />
-                    <Text style={styles.headerTitle}>Track Your Child</Text>
-                </View>
                 <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-                    <MaterialIcons name="logout" size={20} color={Theme.colors.brandGrey} />
+                    <MaterialIcons name="logout" size={24} color={Theme.colors.brandGrey} />
+                </TouchableOpacity>
+                <View style={styles.headerCenter}>
+                    <Text style={styles.headerAppName}>VisageRoute</Text>
+                    <Text style={styles.headerSub}>PARENT PORTAL</Text>
+                </View>
+                <TouchableOpacity style={styles.notificationBtn}>
+                    <MaterialIcons name="notifications" size={24} color="#9ca3af" />
+                    <View style={styles.dot} />
                 </TouchableOpacity>
             </View>
 
-            {/* Status Bar */}
-            <View style={[styles.statusBar, driverLocation && styles.statusBarActive]}>
-                <View style={[styles.statusDot, connected && styles.statusDotConnected]} />
-                <Text style={styles.statusText}>{tripStatus}</Text>
-                {eta !== null && (
-                    <View style={styles.etaBadge}>
-                        <MaterialIcons name="schedule" size={14} color={Theme.colors.brandGrey} />
-                        <Text style={styles.etaText}> ETA: ~{eta} min</Text>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                {/* Welcome Section */}
+                <View style={styles.welcomeRow}>
+                    <View>
+                        <Text style={styles.greeting}>Good afternoon,</Text>
+                        <Text style={styles.userName}>Mrs Safdr</Text>
                     </View>
-                )}
-            </View>
-
-            {/* Map */}
-            <View style={styles.mapContainer}>
-                {Platform.OS === 'web' ? (
-                    <View style={styles.mapPlaceholder}>
-                        <MaterialIcons name="map" size={48} color={Theme.colors.textSecondaryLight} />
-                        <Text style={styles.overlayText}>Live Map is only available on Android/iOS devices.</Text>
-                        <Text style={[styles.overlayText, { fontSize: 12 }]}>Open VisageRoute in Expo Go to see the live tracking.</Text>
+                    <View style={styles.liveBadge}>
+                        <View style={styles.pulseDot} />
+                        <Text style={styles.liveBadgeText}>Live Tracking</Text>
                     </View>
-                ) : (
-                    <>
-                        <MapView
-                            ref={mapRef}
-                            style={StyleSheet.absoluteFillObject}
-                            provider={PROVIDER_DEFAULT}
-                            initialRegion={defaultRegion}
-                            showsUserLocation={false}
-                            showsMyLocationButton={false}
-                        >
-                            {/* Driver / Bus Marker */}
-                            {driverLocation && (
-                                <Marker
-                                    coordinate={{ latitude: driverLocation.lat, longitude: driverLocation.lng }}
-                                    title="Bus Location"
-                                    description={`ETA: ~${eta} minutes`}
-                                >
-                                    <View style={styles.busMarker}>
-                                        <MaterialIcons name="directions-bus" size={20} color={Theme.colors.brandGrey} />
-                                    </View>
-                                </Marker>
-                            )}
+                </View>
 
-                            {/* Parent / Home Marker */}
-                            {myLocation && (
-                                <Marker
-                                    coordinate={{ latitude: myLocation.lat, longitude: myLocation.lng }}
-                                    title="Your Location"
-                                >
-                                    <View style={styles.homeMarker}>
-                                        <MaterialIcons name="home" size={20} color="white" />
-                                    </View>
-                                </Marker>
-                            )}
-                        </MapView>
-
-                        {/* Overlay when no driver yet */}
-                        {!driverLocation && (
-                            <View style={styles.mapOverlay}>
-                                <ActivityIndicator size="large" color={Theme.colors.primary} />
-                                <Text style={styles.overlayText}>Waiting for live bus location...</Text>
+                {/* Status Cards */}
+                <View style={styles.statusGrid}>
+                    {/* Arrival Card */}
+                    <TouchableOpacity 
+                        style={[styles.card, styles.arrivalCard]} 
+                        onPress={() => navigation.navigate('ParentTrackBus')}
+                    >
+                        <MaterialIcons name="directions-bus" size={80} color="rgba(0,0,0,0.1)" style={styles.bgIcon} />
+                        <View style={styles.cardHeader}>
+                            <View style={styles.cardIconBox}>
+                                <MaterialIcons name="schedule" size={18} color={Theme.colors.brandGrey} />
                             </View>
-                        )}
-                    </>
-                )}
+                        </View>
+                        <Text style={styles.cardLabelText}>ESTIMATED ARRIVAL</Text>
+                        <Text style={styles.arrivalValue}>14<Text style={styles.unitText}>min</Text></Text>
+                        <View style={styles.busInfo}>
+                            <View style={styles.busBadge}><Text style={styles.busBadgeText}>Bus #42</Text></View>
+                            <Text style={styles.busSub}>to Home</Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Student Card */}
+                    <TouchableOpacity style={[styles.card, styles.studentCard]}>
+                        <View style={styles.studentTop}>
+                            <View style={styles.avatar}>
+                                <MaterialIcons name="face" size={32} color="#3b82f6" />
+                            </View>
+                            <View style={styles.safeBadge}>
+                                <Text style={styles.safeBadgeText}>SAFE</Text>
+                            </View>
+                        </View>
+                        <View>
+                            <Text style={styles.studentName}>Amna</Text>
+                            <View style={styles.onBoardRow}>
+                                <MaterialIcons name="check-circle" size={14} color="#22c55e" />
+                                <Text style={styles.onBoardText}>On Board</Text>
+                            </View>
+                            <Text style={styles.checkInTime}>Checked in 3:30 PM</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Quick Access */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionHeader}>QUICK ACCESS</Text>
+                    <View style={styles.qaList}>
+                        <QuickAccessItem 
+                            icon="map" 
+                            title="Live Map View" 
+                            subtitle="Track bus location in real-time" 
+                            color="#f59e0b"
+                            onPress={() => navigation.navigate('ParentTrackBus')}
+                        />
+                        <QuickAccessItem 
+                            icon="calendar-today" 
+                            title="Weekly Schedule" 
+                            subtitle="View pick-up & drop-off times" 
+                            color="#3b82f6"
+                            onPress={() => navigation.navigate('ParentSchedule')}
+                        />
+                        <QuickAccessItem 
+                            icon="notifications-active" 
+                            title="Manage Notifications" 
+                            subtitle="Customize alert preferences" 
+                            color="#f97316"
+                            onPress={() => navigation.navigate('ParentNotifications')}
+                        />
+                    </View>
+                </View>
+
+                {/* Announcement Card */}
+                <View style={styles.announcementCard}>
+                    <View style={styles.announcementHeader}>
+                        <View style={styles.announcementTitleRow}>
+                            <MaterialIcons name="campaign" size={20} color={Theme.colors.primary} />
+                            <Text style={styles.announcementTitle}>Announcement</Text>
+                        </View>
+                        <View style={styles.tag}><Text style={styles.tagText}>Today</Text></View>
+                    </View>
+                    <Text style={styles.announcementText}>
+                        School will close early tomorrow at <Text style={{fontWeight: 'bold', color: 'white'}}>1:00 PM</Text> for staff development. Please check updated bus schedules.
+                    </Text>
+                    <TouchableOpacity 
+                        style={styles.detailsBtn}
+                        onPress={() => navigation.navigate('ParentAnnouncements')}
+                    >
+                        <Text style={styles.detailsBtnText}>View Details</Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
+
+            {/* Bottom Nav */}
+            <View style={styles.bottomNav}>
+                <TouchableOpacity style={styles.navItem}>
+                    <MaterialIcons name="home" size={28} color={Theme.colors.primary} />
+                    <Text style={[styles.navText, { color: Theme.colors.primary }]}>Home</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentTrackBus')}>
+                    <MaterialIcons name="map" size={28} color="#9ca3af" />
+                    <Text style={styles.navText}>Map</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentSchedule')}>
+                    <MaterialIcons name="event-note" size={28} color="#9ca3af" />
+                    <Text style={styles.navText}>Schedule</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentAnnouncements')}>
+                    <MaterialIcons name="feedback" size={28} color="#9ca3af" />
+                    <Text style={styles.navText}>Alerts</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentProfile')}>
+                    <MaterialIcons name="person" size={28} color="#9ca3af" />
+                    <Text style={styles.navText}>Profile</Text>
+                </TouchableOpacity>
             </View>
         </SafeAreaView>
     );
@@ -197,116 +179,334 @@ const ParentHome = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Theme.colors.backgroundLight,
+        backgroundColor: '#f9fafb',
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingVertical: 14,
-        backgroundColor: Theme.colors.primary,
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    headerTitle: {
-        fontSize: Theme.typography.sizes.xl,
-        fontWeight: 'bold',
-        color: Theme.colors.brandGrey,
+        paddingVertical: 15,
+        backgroundColor: 'white',
+        borderBottomWidth: 1,
+        borderBottomColor: '#f3f4f6',
     },
     logoutBtn: {
-        padding: 8,
-        borderRadius: Theme.borderRadius.lg,
-        backgroundColor: 'rgba(0,0,0,0.1)',
+        padding: 5,
     },
-    statusBar: {
-        flexDirection: 'row',
+    headerCenter: {
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: Theme.colors.surfaceLight,
-        borderBottomWidth: 1,
-        borderBottomColor: Theme.colors.borderLight,
-        gap: 8,
-        flexWrap: 'wrap',
     },
-    statusBarActive: {
-        backgroundColor: 'rgba(242, 204, 13, 0.1)',
-        borderBottomColor: Theme.colors.primary,
-    },
-    statusDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        backgroundColor: '#d1d5db',
-    },
-    statusDotConnected: {
-        backgroundColor: '#22c55e',
-    },
-    statusText: {
-        flex: 1,
-        fontSize: Theme.typography.sizes.sm,
-        fontWeight: '600',
+    headerAppName: {
+        fontSize: 18,
+        fontWeight: '900',
         color: Theme.colors.brandGrey,
     },
-    etaBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    headerSub: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#9ca3af',
+        letterSpacing: 1.5,
+    },
+    notificationBtn: {
+        padding: 5,
+        position: 'relative',
+    },
+    dot: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        width: 8,
+        height: 8,
         backgroundColor: Theme.colors.primary,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: Theme.borderRadius.full,
-    },
-    etaText: {
-        fontSize: Theme.typography.sizes.sm,
-        fontWeight: 'bold',
-        color: Theme.colors.brandGrey,
-    },
-    mapContainer: {
-        flex: 1,
-    },
-    busMarker: {
-        backgroundColor: Theme.colors.primary,
-        padding: 8,
-        borderRadius: 20,
-        borderWidth: 2,
-        borderColor: Theme.colors.brandGrey,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    homeMarker: {
-        backgroundColor: '#3b82f6',
-        padding: 8,
-        borderRadius: 20,
+        borderRadius: 4,
         borderWidth: 2,
         borderColor: 'white',
     },
-    mapOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(248, 248, 245, 0.85)',
+    scrollContent: {
+        padding: 24,
+        paddingBottom: 100,
+    },
+    welcomeRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        marginBottom: 24,
+    },
+    greeting: {
+        fontSize: 14,
+        color: '#6b7280',
+    },
+    userName: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: Theme.colors.brandGrey,
+    },
+    liveBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fef3c7',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 6,
+    },
+    pulseDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#22c55e',
+    },
+    liveBadgeText: {
+        fontSize: 11,
+        fontWeight: 'bold',
+        color: '#92400e',
+    },
+    statusGrid: {
+        flexDirection: 'row',
+        gap: 16,
+        marginBottom: 24,
+    },
+    card: {
+        flex: 1,
+        height: 176,
+        borderRadius: 24,
+        padding: 20,
+        justifyContent: 'space-between',
+    },
+    arrivalCard: {
+        backgroundColor: Theme.colors.primary,
+        shadowColor: Theme.colors.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 15,
+        elevation: 8,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    bgIcon: {
+        position: 'absolute',
+        right: -20,
+        top: -10,
+        transform: [{ rotate: '15deg' }],
+    },
+    cardHeader: {
+        flexDirection: 'row',
+    },
+    cardIconBox: {
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        padding: 6,
+        borderRadius: 8,
+    },
+    cardLabelText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: 'rgba(0,0,0,0.6)',
+        letterSpacing: 0.5,
+    },
+    arrivalValue: {
+        fontSize: 40,
+        fontWeight: '900',
+        color: Theme.colors.brandGrey,
+    },
+    unitText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    busInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    busBadge: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+    },
+    busBadgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: Theme.colors.brandGrey,
+    },
+    busSub: {
+        fontSize: 10,
+        color: 'rgba(0,0,0,0.6)',
+        fontWeight: '500',
+    },
+    studentCard: {
+        backgroundColor: 'white',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+    },
+    studentTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+    avatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#eff6ff',
         justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: 'white',
+    },
+    safeBadge: {
+        backgroundColor: '#dcfce7',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 20,
+    },
+    safeBadgeText: {
+        fontSize: 9,
+        fontWeight: '900',
+        color: '#15803d',
+    },
+    studentName: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: Theme.colors.brandGrey,
+    },
+    onBoardRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 4,
+    },
+    onBoardText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#4b5563',
+    },
+    checkInTime: {
+        fontSize: 9,
+        color: '#9ca3af',
+        marginTop: 2,
+    },
+    section: {
+        marginBottom: 24,
+    },
+    sectionHeader: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: Theme.colors.brandGrey,
+        letterSpacing: 1,
+        marginBottom: 12,
+    },
+    qaList: {
+        backgroundColor: 'white',
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        overflow: 'hidden',
+    },
+    qaItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f3f4f6',
+    },
+    qaLeft: {
+        flexDirection: 'row',
         alignItems: 'center',
         gap: 16,
     },
-    mapPlaceholder: {
-        flex: 1,
-        backgroundColor: Theme.colors.borderLight,
+    qaIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 40,
-        gap: 12,
     },
-    overlayText: {
-        fontSize: Theme.typography.sizes.base,
-        color: Theme.colors.textSecondaryLight,
-        fontWeight: '500',
-        textAlign: 'center',
+    qaTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: Theme.colors.brandGrey,
+    },
+    qaSubtitle: {
+        fontSize: 11,
+        color: '#6b7280',
+    },
+    announcementCard: {
+        backgroundColor: '#111827',
+        borderRadius: 24,
+        padding: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    announcementHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    announcementTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    announcementTitle: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    tag: {
+        backgroundColor: '#1f2937',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+    },
+    tagText: {
+        fontSize: 10,
+        color: '#9ca3af',
+        fontWeight: 'bold',
+    },
+    announcementText: {
+        color: '#d1d5db',
+        fontSize: 14,
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    detailsBtn: {
+        backgroundColor: 'white',
+        height: 44,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    detailsBtnText: {
+        color: Theme.colors.brandGrey,
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+    bottomNav: {
+        position: 'absolute',
+        bottom: 0,
+        width: '100%',
+        backgroundColor: 'white',
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        paddingTop: 12,
+        paddingBottom: Platform.OS === 'ios' ? 30 : 15,
+        borderTopWidth: 1,
+        borderTopColor: '#f3f4f6',
+    },
+    navItem: {
+        alignItems: 'center',
+        gap: 4,
+    },
+    navText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#9ca3af',
     },
 });
 
