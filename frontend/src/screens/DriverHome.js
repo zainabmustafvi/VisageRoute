@@ -1,28 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet, Alert, Platform, SafeAreaView, ActivityIndicator
+    View, Text, TouchableOpacity, StyleSheet, Alert, Platform, SafeAreaView, ActivityIndicator, Dimensions, Animated, PanResponder
 } from 'react-native';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import { io } from 'socket.io-client';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Theme from '../theme/Theme';
-import { globalStyles } from '../theme/globalStyles';
+
+const { width } = Dimensions.get('window');
+const SLIDER_WIDTH = width - 48;
+const BUTTON_SIZE = 104;
+const SWIPE_RANGE = SLIDER_WIDTH - BUTTON_SIZE - 8;
 
 // ⚠️ Update to your machine's IP on the same Wi-Fi network
 const SOCKET_URL = 'http://192.168.0.106:5000';
-
-// Placeholder route ID — in production this comes from the driver's profile API
 const DRIVER_ROUTE_ID = '000000000000000000000001';
 
 const DriverHome = ({ navigation }) => {
     const [tripActive, setTripActive] = useState(false);
     const [currentLocation, setCurrentLocation] = useState(null);
-    const [statusMsg, setStatusMsg] = useState('Ready to start trip.');
     const [connecting, setConnecting] = useState(false);
 
     const socketRef = useRef(null);
     const locationWatcherRef = useRef(null);
+    const pan = useRef(new Animated.Value(0)).current;
 
     const handleLogout = async () => {
         if (tripActive) await stopTrip();
@@ -32,7 +34,6 @@ const DriverHome = ({ navigation }) => {
 
     const connectSocket = async () => {
         setConnecting(true);
-        // Retrieve the stored JWT token
         const token = await SecureStore.getItemAsync('socketToken');
         if (!token) {
             Alert.alert('Session Error', 'Please log in again.');
@@ -53,33 +54,28 @@ const DriverHome = ({ navigation }) => {
 
         socket.on('connect_error', (err) => {
             console.error('[Driver Socket] Connection error:', err.message);
-            setStatusMsg('⚠️ Could not connect to server. Check network.');
             setConnecting(false);
         });
-
-        socket.on('tripEnded', () => setStatusMsg('Trip completed and broadcast to parents.'));
 
         socketRef.current = socket;
     };
 
     const startTrip = async () => {
-        // 1. Request location permissions
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert('Permission Denied', 'Location access is required to track the trip.');
+            Alert.alert('Permission Denied', 'Location access is required.');
+            resetSlider();
             return;
         }
 
         await connectSocket();
         setTripActive(true);
-        setStatusMsg('📍 Trip active — broadcasting location...');
 
-        // 2. Watch location and emit to server every ~4 seconds
         locationWatcherRef.current = await Location.watchPositionAsync(
             {
                 accuracy: Location.Accuracy.High,
                 timeInterval: 4000,
-                distanceInterval: 10, // meters
+                distanceInterval: 10,
             },
             (loc) => {
                 const { latitude, longitude } = loc.coords;
@@ -96,12 +92,10 @@ const DriverHome = ({ navigation }) => {
     };
 
     const stopTrip = async () => {
-        // Stop location watching
         if (locationWatcherRef.current) {
             locationWatcherRef.current.remove();
             locationWatcherRef.current = null;
         }
-        // Notify parents trip is over
         if (socketRef.current?.connected) {
             socketRef.current.emit('endTrip', { routeId: DRIVER_ROUTE_ID });
             socketRef.current.disconnect();
@@ -109,65 +103,125 @@ const DriverHome = ({ navigation }) => {
         }
         setTripActive(false);
         setCurrentLocation(null);
-        setStatusMsg('Trip ended successfully.');
+        resetSlider();
     };
+
+    const resetSlider = () => {
+        Animated.spring(pan, {
+            toValue: 0,
+            useNativeDriver: false,
+        }).start();
+    };
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => !tripActive,
+            onMoveShouldSetPanResponder: () => !tripActive,
+            onPanResponderMove: Animated.event([null, { dx: pan }], {
+                useNativeDriver: false,
+            }),
+            onPanResponderRelease: (e, gestureState) => {
+                if (gestureState.dx > SWIPE_RANGE * 0.75) {
+                    Animated.timing(pan, {
+                        toValue: SWIPE_RANGE,
+                        duration: 200,
+                        useNativeDriver: false,
+                    }).start(() => {
+                        startTrip();
+                    });
+                } else {
+                    resetSlider();
+                }
+            },
+        })
+    ).current;
 
     useEffect(() => {
         return () => {
-            // Cleanup on unmount
             if (locationWatcherRef.current) locationWatcherRef.current.remove();
             if (socketRef.current) socketRef.current.disconnect();
         };
     }, []);
 
+    const translateX = pan.interpolate({
+        inputRange: [0, SWIPE_RANGE],
+        outputRange: [0, SWIPE_RANGE],
+        extrapolate: 'clamp',
+    });
+
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header */}
             <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <MaterialIcons name="directions-bus" size={28} color={Theme.colors.brandGrey} />
-                    <Text style={styles.headerTitle}>Driver Portal</Text>
+                <View>
+                    <Text style={styles.driverNameTitle}>Sadaat Malik</Text>
+                    <View style={styles.headerSubRow}>
+                        <View style={styles.headerDot} />
+                        <Text style={styles.headerSub}>BUS DRIVER #104</Text>
+                    </View>
                 </View>
                 <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-                    <MaterialIcons name="logout" size={20} color={Theme.colors.textSecondaryLight} />
+                    <Text style={styles.logoutText}>Logout</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* Status Card */}
-            <View style={[styles.card, tripActive && styles.cardActive]}>
-                <View style={[styles.statusDot, tripActive && styles.statusDotActive]} />
-                <Text style={styles.statusLabel}>{tripActive ? 'TRIP IN PROGRESS' : 'OFF DUTY'}</Text>
-                <Text style={styles.statusMsg}>{statusMsg}</Text>
-                {currentLocation && (
-                    <Text style={styles.coordsText}>
-                        📍 {currentLocation.lat.toFixed(5)}, {currentLocation.lng.toFixed(5)}
+            <View style={styles.main}>
+                <View style={styles.statusDisplay}>
+                    <View style={styles.statusLabelRow}>
+                        <View style={[styles.pulseDot, tripActive && styles.pulseDotActive]} />
+                        <Text style={styles.statusLabel}>CURRENT STATUS</Text>
+                    </View>
+                    <Text style={[styles.statusMain, tripActive && styles.statusMainActive]}>
+                        {tripActive ? 'ONLINE' : 'OFFLINE'}
                     </Text>
-                )}
-            </View>
-
-            {/* Route Info */}
-            <View style={styles.card}>
-                <Text style={styles.sectionLabel}>ASSIGNED ROUTE</Text>
-                <View style={globalStyles.row}>
-                    <MaterialIcons name="route" size={20} color={Theme.colors.primary} />
-                    <Text style={styles.routeText}>  Route #{DRIVER_ROUTE_ID.slice(-4)}</Text>
+                    <Text style={styles.statusDesc}>
+                        {tripActive 
+                            ? 'You are broadcasting your live location to students.' 
+                            : 'You are hidden from students. Start your route to broadcast location.'}
+                    </Text>
                 </View>
-            </View>
 
-            {/* Trip Controls */}
-            <View style={styles.controlsContainer}>
                 {connecting ? (
                     <ActivityIndicator size="large" color={Theme.colors.primary} />
                 ) : tripActive ? (
-                    <TouchableOpacity style={styles.stopButton} onPress={stopTrip}>
-                        <MaterialIcons name="stop-circle" size={24} color="white" />
-                        <Text style={styles.stopButtonText}>End Trip</Text>
+                    <TouchableOpacity style={styles.stopTripBtn} onPress={stopTrip}>
+                        <View style={styles.stopIconBox}>
+                            <MaterialIcons name="location-off" size={32} color="#fff" />
+                        </View>
+                        <Text style={styles.stopText}>STOP SHARING LOCATION</Text>
                     </TouchableOpacity>
                 ) : (
-                    <TouchableOpacity style={styles.startButton} onPress={startTrip}>
-                        <MaterialIcons name="play-circle-filled" size={24} color={Theme.colors.brandGrey} />
-                        <Text style={styles.startButtonText}>Start Trip</Text>
-                    </TouchableOpacity>
+                    <View style={styles.sliderContainer}>
+                        <View style={styles.sliderTrack}>
+                            <Text style={styles.swipeText}>Swipe to Start</Text>
+                            <View style={styles.chevronRow}>
+                                <MaterialIcons name="chevron-right" size={24} color="#ccc" style={styles.chevron} />
+                                <MaterialIcons name="chevron-right" size={24} color="#ccc" style={[styles.chevron, { marginLeft: -12 }]} />
+                            </View>
+                        </View>
+                        <Animated.View
+                            style={[styles.sliderHandle, { transform: [{ translateX }] }]}
+                            {...panResponder.panHandlers}
+                        >
+                            <View style={styles.handleInner}>
+                                <MaterialIcons name="location-off" size={32} color={Theme.colors.textSecondaryDark} />
+                            </View>
+                        </Animated.View>
+                    </View>
+                )}
+
+                {!tripActive && (
+                    <View style={styles.hintContainer}>
+                        <MaterialIcons name="touch-app" size={18} color="#9ca3af" />
+                        <Text style={styles.hintText}>Long press or slide to activate</Text>
+                    </View>
+                )}
+                
+                {currentLocation && (
+                    <View style={styles.locationBadge}>
+                         <Text style={styles.coordsText}>
+                            📍 {currentLocation.lat.toFixed(5)}, {currentLocation.lng.toFixed(5)}
+                        </Text>
+                    </View>
                 )}
             </View>
         </SafeAreaView>
@@ -183,125 +237,209 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        backgroundColor: Theme.colors.primary,
+        paddingHorizontal: 24,
+        paddingTop: 24,
+        paddingBottom: 20,
     },
-    headerLeft: {
+    driverNameTitle: {
+        fontSize: Theme.typography.sizes['2xl'],
+        fontWeight: '900',
+        color: Theme.colors.brandGrey,
+    },
+    headerSubRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        marginTop: 2,
     },
-    headerTitle: {
-        fontSize: Theme.typography.sizes['2xl'],
-        fontWeight: 'bold',
-        color: Theme.colors.brandGrey,
+    headerDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: Theme.colors.primary,
+        marginRight: 6,
+    },
+    headerSub: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: Theme.colors.textSecondaryLight,
+        letterSpacing: 1,
     },
     logoutBtn: {
-        padding: 8,
-        borderRadius: Theme.borderRadius.lg,
-        backgroundColor: 'rgba(0,0,0,0.1)',
-    },
-    card: {
-        margin: 16,
-        padding: 20,
-        backgroundColor: Theme.colors.surfaceLight,
-        borderRadius: Theme.borderRadius.xl,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: Theme.borderRadius.full,
+        backgroundColor: '#fff',
         borderWidth: 1,
         borderColor: Theme.colors.borderLight,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
         elevation: 2,
     },
-    cardActive: {
-        borderColor: Theme.colors.primary,
-        backgroundColor: 'rgba(242, 204, 13, 0.08)',
+    logoutText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: Theme.colors.textSecondaryLight,
+        textTransform: 'uppercase',
     },
-    statusDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: Theme.colors.borderLight,
+    main: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+    },
+    statusDisplay: {
+        alignItems: 'center',
+        marginBottom: 60,
+    },
+    statusLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginBottom: 8,
     },
-    statusDotActive: {
-        backgroundColor: '#22c55e',
-        shadowColor: '#22c55e',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.8,
-        shadowRadius: 6,
-        elevation: 3,
+    pulseDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#9ca3af',
+        marginRight: 8,
+    },
+    pulseDotActive: {
+        backgroundColor: Theme.colors.primary,
+        // animate-pulse in React Native would need timing
     },
     statusLabel: {
-        fontSize: Theme.typography.sizes.xs,
-        fontWeight: 'bold',
+        fontSize: 12,
+        fontWeight: '800',
         color: Theme.colors.textSecondaryLight,
-        letterSpacing: 1.5,
-        marginBottom: 6,
+        letterSpacing: 2,
     },
-    statusMsg: {
-        fontSize: Theme.typography.sizes.base,
+    statusMain: {
+        fontSize: 48,
+        fontWeight: '900',
         color: Theme.colors.brandGrey,
-        fontWeight: '500',
+        letterSpacing: -1,
     },
-    coordsText: {
-        marginTop: 8,
+    statusMainActive: {
+        color: Theme.colors.primary,
+    },
+    statusDesc: {
         fontSize: Theme.typography.sizes.sm,
         color: Theme.colors.textSecondaryLight,
-        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        textAlign: 'center',
+        marginTop: 12,
+        lineHeight: 20,
+        maxWidth: 280,
     },
-    sectionLabel: {
-        fontSize: Theme.typography.sizes.xs,
-        fontWeight: 'bold',
-        color: Theme.colors.textSecondaryLight,
-        letterSpacing: 1.5,
-        marginBottom: 10,
+    sliderContainer: {
+        width: SLIDER_WIDTH,
+        height: 120,
+        backgroundColor: '#fff',
+        borderRadius: 60,
+        justifyContent: 'center',
+        paddingHorizontal: 4,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
+        position: 'relative',
     },
-    routeText: {
-        fontSize: Theme.typography.sizes.base,
-        fontWeight: '600',
-        color: Theme.colors.brandGrey,
-    },
-    controlsContainer: {
-        margin: 16,
-        alignItems: 'center',
-    },
-    startButton: {
+    sliderTrack: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: Theme.colors.primary,
-        paddingVertical: 16,
-        paddingHorizontal: 48,
-        borderRadius: Theme.borderRadius.xl,
-        gap: 10,
-        shadowColor: Theme.colors.primary,
+        paddingLeft: 40,
+    },
+    swipeText: {
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#9ca3af',
+        textTransform: 'uppercase',
+        letterSpacing: 2,
+    },
+    chevronRow: {
+        flexDirection: 'row',
+        marginLeft: 8,
+    },
+    chevron: {
+        // animate pulse
+    },
+    sliderHandle: {
+        width: BUTTON_SIZE,
+        height: BUTTON_SIZE,
+        borderRadius: BUTTON_SIZE / 2,
+        backgroundColor: '#f8f8f5',
+        position: 'absolute',
+        left: 8,
+        elevation: 4,
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-        elevation: 6,
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#eeede9',
     },
-    startButtonText: {
-        fontSize: Theme.typography.sizes.lg,
-        fontWeight: 'bold',
-        color: Theme.colors.brandGrey,
+    handleInner: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#eeede9',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    stopButton: {
+    stopTripBtn: {
+        width: SLIDER_WIDTH,
+        height: 120,
+        backgroundColor: Theme.colors.primary,
+        borderRadius: 60,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#ef4444',
-        paddingVertical: 16,
-        paddingHorizontal: 48,
-        borderRadius: Theme.borderRadius.xl,
-        gap: 10,
+        paddingHorizontal: 24,
+        gap: 16,
+        elevation: 10,
     },
-    stopButtonText: {
-        fontSize: Theme.typography.sizes.lg,
-        fontWeight: 'bold',
-        color: 'white',
+    stopIconBox: {
+        width: BUTTON_SIZE - 16,
+        height: BUTTON_SIZE - 16,
+        borderRadius: 44,
+        backgroundColor: 'rgba(0,0,0,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    stopText: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: Theme.colors.brandGrey,
+        flex: 1,
+    },
+    hintContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 24,
+        gap: 8,
+        opacity: 0.6,
+    },
+    hintText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#6b7280',
+    },
+    locationBadge: {
+        marginTop: 20,
+        backgroundColor: '#fff',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#eee',
+    },
+    coordsText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: Theme.colors.textSecondaryDark,
+        fontFamily: 'monospace',
     },
 });
 
