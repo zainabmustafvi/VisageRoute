@@ -6,9 +6,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Screens
 import SplashScreen from './src/screens/SplashScreen';
 import LoginScreen from './src/screens/LoginScreen';
-import DriverHome from './src/screens/DriverHome';
 import ParentHome from './src/screens/ParentHome';
 import AdminNavigator from './src/navigation/AdminNavigator';
+import DriverNavigator from './src/navigation/DriverNavigator';
 import AdminRegisterBus from './src/screens/AdminRegisterBus';
 import AdminRegisterStudent from './src/screens/AdminRegisterStudent';
 import AdminRegisterDriver from './src/screens/AdminRegisterDriver';
@@ -47,7 +47,7 @@ export default function App() {
           <Stack.Screen name="AdminBusDetail" component={AdminBusDetail} />
           <Stack.Screen name="AdminStudentDetail" component={AdminStudentDetail} />
           <Stack.Screen name="AdminDriverDetail" component={AdminDriverDetail} />
-          <Stack.Screen name="DriverHome" component={DriverHome} />
+          <Stack.Screen name="DriverHome" component={DriverNavigator} />
           <Stack.Screen name="ParentHome" component={ParentHome} />
           <Stack.Screen name="ParentTrackBus" component={ParentTrackBus} />
           <Stack.Screen name="ParentSchedule" component={ParentSchedule} />
