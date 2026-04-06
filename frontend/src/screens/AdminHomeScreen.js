@@ -11,16 +11,14 @@ const AdminHomeScreen = ({ navigation }) => {
             {/* Header */}
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <TouchableOpacity style={styles.logoutButton} onPress={() => navigation.replace('Login')}>
-                        <MaterialCommunityIcons name="logout" size={20} color={colors.brandGrey} />
-                        <Text style={styles.logoutText}>LOGOUT</Text>
-                    </TouchableOpacity>
                     <View>
-                        <Text style={styles.headerTitle}></Text>
                         <Text style={styles.headerSubtitle}>ADMIN PORTAL</Text>
                     </View>
                 </View>
-                <View style={{ width: 40 }} />
+                <TouchableOpacity style={styles.logoutButton} onPress={() => navigation.replace('Login')}>
+                    <MaterialCommunityIcons name="logout" size={20} color={colors.brandGrey} />
+                    <Text style={styles.logoutText}>LOGOUT</Text>
+                </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -168,7 +166,6 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderRadius: borderRadius.md,
         backgroundColor: '#f9fafb',
-        marginRight: spacing.md,
         borderWidth: 1,
         borderColor: '#f3f4f6',
     },

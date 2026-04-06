@@ -26,7 +26,7 @@ const AdminRegisterStudent = ({ navigation }) => {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <MaterialCommunityIcons name="chevron-left" size={32} color={colors.brandGrey} />
+                    <MaterialCommunityIcons name="chevron-left" size={28} color={colors.brandGrey} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Register Student</Text>
                 <View style={{ width: 40 }} />
@@ -232,8 +232,8 @@ const AdminRegisterStudent = ({ navigation }) => {
                     <Text style={styles.secondaryButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.primaryButton}>
-                    <Text style={styles.primaryButtonText}>Next Step</Text>
-                    <MaterialCommunityIcons name="arrow-right" size={20} color="#000" />
+                    <Text style={styles.primaryButtonText}>Register</Text>
+                    <MaterialCommunityIcons name="check-circle" size={20} color="#000" />
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
