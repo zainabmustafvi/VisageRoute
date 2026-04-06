@@ -19,17 +19,14 @@ const AdminBusDetail = ({ navigation, route }) => {
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <MaterialCommunityIcons name="arrow-left" size={24} color={colors.brandGrey} />
+                        <MaterialCommunityIcons name="chevron-left" size={28} color={colors.brandGrey} />
                     </TouchableOpacity>
                     <View>
                         <Text style={styles.headerTitle}>Edit Bus Details</Text>
                         <Text style={styles.headerSubtitle}>ADMIN PORTAL</Text>
                     </View>
                 </View>
-                <TouchableOpacity style={styles.notificationButton}>
-                    <MaterialCommunityIcons name="bell-outline" size={24} color="#9ca3af" />
-                    <View style={styles.notificationDot} />
-                </TouchableOpacity>
+                <View style={{ width: 40 }} />
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -152,7 +149,7 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     backButton: {
-        padding: 4,
+        padding: spacing.xs,
     },
     headerTitle: {
         fontSize: 18,

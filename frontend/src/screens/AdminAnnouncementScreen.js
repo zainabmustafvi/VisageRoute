@@ -97,21 +97,6 @@ const AdminAnnouncementScreen = ({ navigation }) => {
                                 thumbColor="#fff"
                             />
                         </View>
-                        
-                        <View style={styles.divider} />
-
-                        <View style={styles.channelItem}>
-                            <MaterialCommunityIcons name="checkbox-marked" size={20} color={colors.primary} />
-                            <Text style={styles.channelText}>Push Notification</Text>
-                        </View>
-                        <View style={styles.channelItem}>
-                            <MaterialCommunityIcons name="checkbox-blank-outline" size={20} color="#d1d5db" />
-                            <Text style={styles.channelText}>SMS Text Message</Text>
-                        </View>
-                        <View style={styles.channelItem}>
-                            <MaterialCommunityIcons name="checkbox-blank-outline" size={20} color="#d1d5db" />
-                            <Text style={styles.channelText}>Email</Text>
-                        </View>
                     </View>
                 </View>
                 
@@ -119,10 +104,7 @@ const AdminAnnouncementScreen = ({ navigation }) => {
             </ScrollView>
 
             <View style={styles.footer}>
-                <TouchableOpacity style={styles.previewButton}>
-                    <Text style={styles.previewButtonText}>Preview</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.sendButton}>
+                <TouchableOpacity style={[styles.sendButton, { flex: 1 }]}>
                     <Text style={styles.sendButtonText}>Send Announcement</Text>
                     <MaterialCommunityIcons name="send" size={20} color="#111827" />
                 </TouchableOpacity>

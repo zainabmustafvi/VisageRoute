@@ -57,17 +57,11 @@ const AdminBusCRUD = ({ navigation }) => {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity style={styles.menuButton}>
-                    <MaterialCommunityIcons name="menu" size={24} color="#4b5563" />
+                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+                    <MaterialCommunityIcons name="chevron-left" size={28} color="#4b5563" />
                 </TouchableOpacity>
-                <View style={styles.headerTitleContainer}>
-                    <Text style={styles.headerTitle}></Text>
-                    <Text style={styles.headerSubtitle}>ADMIN PORTAL</Text>
-                </View>
-                <TouchableOpacity style={styles.notificationButton}>
-                    <MaterialCommunityIcons name="bell-outline" size={24} color="#d1d5db" />
-                    <View style={styles.notificationDot} />
-                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Bus Management</Text>
+                <View style={{ width: 40 }} />
             </View>
 
             <View style={styles.content}>
@@ -82,21 +76,9 @@ const AdminBusCRUD = ({ navigation }) => {
                 </View>
 
                 <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('RegisterBus')}>
-                    <MaterialCommunityIcons name="plus-circle" size={20} color="#fff" />
+                    <MaterialCommunityIcons name="plus-circle" size={20} color={colors.brandGrey} />
                     <Text style={styles.addButtonText}>Add New Bus</Text>
                 </TouchableOpacity>
-
-                <View style={styles.filterRow}>
-                    <TouchableOpacity style={[styles.filterChip, styles.filterChipActive]}>
-                        <Text style={styles.filterChipTextActive}>All Buses</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.filterChip}>
-                        <Text style={styles.filterChipText}>Active</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.filterChip}>
-                        <Text style={styles.filterChipText}>Maintenance</Text>
-                    </TouchableOpacity>
-                </View>
 
                 <FlatList
                     data={buses}
@@ -118,46 +100,20 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: spacing.lg,
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing.md,
         paddingVertical: spacing.md,
         backgroundColor: colors.brandWhite,
         borderBottomWidth: 1,
         borderBottomColor: '#f3f4f6',
     },
-    menuButton: {
-        padding: spacing.sm,
-        marginLeft: -spacing.sm,
-    },
-    headerTitleContainer: {
-        flex: 1,
-        alignItems: 'center',
+    backButton: {
+        padding: spacing.xs,
     },
     headerTitle: {
         fontSize: typography.sizes.lg,
         fontWeight: 'bold',
         color: colors.brandGrey,
-        lineHeight: 18,
-    },
-    headerSubtitle: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: '#9ca3af',
-        letterSpacing: 1,
-    },
-    notificationButton: {
-        padding: spacing.sm,
-        marginRight: -spacing.sm,
-    },
-    notificationDot: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: colors.primary,
-        borderWidth: 1,
-        borderColor: colors.brandWhite,
     },
     content: {
         flex: 1,
@@ -194,50 +150,19 @@ const styles = StyleSheet.create({
         color: '#4b5563',
     },
     addButton: {
-        backgroundColor: '#f59e0b',
+        backgroundColor: colors.primary,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 14,
+        height: 56,
         borderRadius: 16,
         gap: 8,
-        shadowColor: '#f59e0b',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        marginBottom: spacing.lg,
+        marginBottom: 24,
     },
     addButtonText: {
-        color: '#fff',
+        fontSize: 16,
         fontWeight: 'bold',
-        fontSize: typography.sizes.base,
-    },
-    filterRow: {
-        flexDirection: 'row',
-        gap: 8,
-        marginBottom: spacing.lg,
-    },
-    filterChip: {
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        backgroundColor: colors.brandWhite,
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-        borderRadius: 20,
-    },
-    filterChipActive: {
-        backgroundColor: '#111827',
-        borderColor: '#111827',
-    },
-    filterChipText: {
-        fontSize: 12,
-        color: '#4b5563',
-        fontWeight: '500',
-    },
-    filterChipTextActive: {
-        fontSize: 12,
-        color: '#fff',
-        fontWeight: '500',
+        color: colors.brandGrey,
     },
     listContent: {
         gap: 16,

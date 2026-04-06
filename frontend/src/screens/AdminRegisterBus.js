@@ -23,7 +23,7 @@ const AdminRegisterBus = ({ navigation }) => {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <MaterialCommunityIcons name="chevron-left" size={32} color={colors.brandGrey} />
+                    <MaterialCommunityIcons name="chevron-left" size={28} color={colors.brandGrey} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Register New Bus</Text>
                 <TouchableOpacity onPress={() => navigation.goBack()}>

@@ -1,25 +1,25 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Image, TextInput } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme/Theme';
+import { Picker } from '@react-native-picker/picker';
 
 const AdminStudentDetail = ({ navigation, route }) => {
     // In a real app, we would fetch student data using the ID from route.params
-    const student = {
-        name: 'Ayesha Khan',
-        dept: 'Computer Science Dept.',
-        route: 'Route 4A',
-        id: '2024-001',
-        year: '3rd Year (Junior)',
-        semester: 'Fall 2024',
-        rollNo: 'CS-21-045',
-        pickup: 'Gulberg Main Stop',
-        busNo: 'LEV-892',
-        phone: '+92 300 1234567',
-        email: 'ayesha.k@uni.edu.pk',
-        guardian: 'Mr. Khan (+92 321 7654321)',
-        image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80'
-    };
+    // Initial State
+    const [name, setName] = useState('Ayesha Khan');
+    const [dept, setDept] = useState('Computer Science Dept.');
+    const [selectedRoute, setSelectedRoute] = useState('Route 4A');
+    const [studentId, setStudentId] = useState('2024-001');
+    const [year, setYear] = useState('3rd Year (Junior)');
+    const [semester, setSemester] = useState('Fall 2024');
+    const [rollNo, setRollNo] = useState('CS-21-045');
+    const [pickup, setPickup] = useState('Gulberg Main Stop');
+    const [busNo, setBusNo] = useState('LEV-892');
+    const [phone, setPhone] = useState('+92 300 1234567');
+    const [email, setEmail] = useState('ayesha.k@uni.edu.pk');
+    const [guardian, setGuardian] = useState('Mr. Khan (+92 321 7654321)');
+    const [image, setImage] = useState('https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=200&q=80');
 
     return (
         <SafeAreaView style={styles.container}>
@@ -28,130 +28,169 @@ const AdminStudentDetail = ({ navigation, route }) => {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <MaterialCommunityIcons name="arrow-left" size={28} color="#111827" />
+                    <MaterialCommunityIcons name="chevron-left" size={28} color={colors.brandGrey} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Student Details</Text>
-                <TouchableOpacity>
-                    <MaterialCommunityIcons name="dots-vertical" size={24} color="#9ca3af" />
-                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Edit Student</Text>
+                <View style={{ width: 40 }} />
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {/* Profile Card */}
+                {/* Profile Card - Keeping Aesthetic but adding Edit Button for Image */}
                 <View style={styles.profileCard}>
                     <View style={styles.imageContainer}>
-                        <Image source={{ uri: student.image }} style={styles.profileImage} />
-                        <View style={styles.activeBadge}>
-                            <MaterialCommunityIcons name="check" size={14} color="#fff" />
-                        </View>
+                        <Image source={{ uri: image }} style={styles.profileImage} />
+                        <TouchableOpacity style={styles.editImageBadge}>
+                            <MaterialCommunityIcons name="camera" size={16} color="#fff" />
+                        </TouchableOpacity>
                     </View>
-                    <Text style={styles.studentName}>{student.name}</Text>
-                    <Text style={styles.studentDept}>{student.dept}</Text>
-                    
-                    <View style={styles.badgeRow}>
-                        <View style={styles.routeBadge}>
-                            <Text style={styles.routeBadgeText}>{student.route}</Text>
-                        </View>
-                        <View style={styles.idBadge}>
-                            <Text style={styles.idBadgeText}>ID: {student.id}</Text>
-                        </View>
-                    </View>
+                    <Text style={styles.studentNameDisplay}>{name}</Text>
+                    <Text style={styles.studentIdDisplay}>ID: {studentId}</Text>
                 </View>
 
-                {/* Information Sections */}
-                <View style={styles.infoContainer}>
-                    {/* Academic Info */}
-                    <View style={styles.sectionCard}>
-                        <View style={styles.sectionHeader}>
-                            <MaterialCommunityIcons name="school" size={20} color="#f59e0b" />
-                            <Text style={styles.sectionTitle}>ACADEMIC INFO</Text>
-                        </View>
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Academic Year</Text>
-                            <Text style={styles.infoValue}>{student.year}</Text>
-                        </View>
-                        <View style={styles.divider} />
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Semester</Text>
-                            <Text style={styles.infoValue}>{student.semester}</Text>
-                        </View>
-                        <View style={styles.divider} />
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Roll Number</Text>
-                            <Text style={styles.infoValue}>{student.rollNo}</Text>
-                        </View>
-                    </View>
-
-                    {/* Route Details */}
-                    <View style={styles.sectionCard}>
-                        <View style={styles.sectionHeader}>
-                            <MaterialCommunityIcons name="bus" size={20} color="#f59e0b" />
-                            <Text style={styles.sectionTitle}>ROUTE DETAILS</Text>
-                        </View>
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Assigned Route</Text>
-                            <View style={styles.routeValueBadge}>
-                                <Text style={styles.routeValueText}>{student.route}</Text>
+                {/* Form Sections */}
+                <View style={styles.formContainer}>
+                    {/* Basic Information */}
+                    <View style={styles.card}>
+                        <Text style={styles.sectionLabel}>BASIC INFORMATION</Text>
+                        
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Full Name</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="account-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={name}
+                                    onChangeText={setName}
+                                    placeholder="Full Name"
+                                />
                             </View>
                         </View>
-                        <View style={styles.divider} />
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Pickup Point</Text>
-                            <Text style={styles.infoValue}>{student.pickup}</Text>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Student ID</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="badge-account-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={studentId}
+                                    onChangeText={setStudentId}
+                                    placeholder="ID"
+                                />
+                            </View>
                         </View>
-                        <View style={styles.divider} />
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Bus Number</Text>
-                            <Text style={styles.infoValue}>{student.busNo}</Text>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Roll Number</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="numeric" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={rollNo}
+                                    onChangeText={setRollNo}
+                                    placeholder="Roll No"
+                                />
+                            </View>
                         </View>
                     </View>
 
-                    {/* Contact Details */}
-                    <View style={styles.sectionCard}>
-                        <View style={styles.sectionHeader}>
-                            <MaterialCommunityIcons name="phone" size={20} color="#f59e0b" />
-                            <Text style={styles.sectionTitle}>CONTACT DETAILS</Text>
+                    {/* Academic & Transport */}
+                    <View style={styles.card}>
+                        <Text style={styles.sectionLabel}>ACADEMIC & TRANSPORT</Text>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Department</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="school-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={dept}
+                                    onChangeText={setDept}
+                                    placeholder="Department"
+                                />
+                            </View>
                         </View>
                         
-                        <View style={styles.contactItem}>
-                            <View style={[styles.contactIconContainer, { backgroundColor: '#eff6ff' }]}>
-                                <MaterialCommunityIcons name="phone" size={16} color="#3b82f6" />
-                            </View>
-                            <View style={styles.contactMeta}>
-                                <Text style={styles.contactLabel}>Phone Number</Text>
-                                <Text style={styles.contactValue}>{student.phone}</Text>
-                            </View>
-                            <TouchableOpacity>
-                                <MaterialCommunityIcons name="chat-outline" size={20} color="#d1d5db" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.contactItem}>
-                            <View style={[styles.contactIconContainer, { backgroundColor: '#fff7ed' }]}>
-                                <MaterialCommunityIcons name="email-outline" size={16} color="#f97316" />
-                            </View>
-                            <View style={styles.contactMeta}>
-                                <Text style={styles.contactLabel}>Email Address</Text>
-                                <Text style={styles.contactValue}>{student.email}</Text>
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Assigned Route</Text>
+                            <View style={styles.pickerWrapper}>
+                                <MaterialCommunityIcons name="bus-side" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <Picker
+                                    selectedValue={selectedRoute}
+                                    onValueChange={(v) => setSelectedRoute(v)}
+                                    style={styles.picker}
+                                >
+                                    <Picker.Item label="Route 4A" value="Route 4A" />
+                                    <Picker.Item label="Route 2B" value="Route 2B" />
+                                    <Picker.Item label="Route 5C" value="Route 5C" />
+                                </Picker>
                             </View>
                         </View>
 
-                        <View style={styles.contactItem}>
-                            <View style={[styles.contactIconContainer, { backgroundColor: '#f5f3ff' }]}>
-                                <MaterialCommunityIcons name="account-group-outline" size={16} color="#8b5cf6" />
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Pickup Point</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="map-marker-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={pickup}
+                                    onChangeText={setPickup}
+                                    placeholder="Pickup Point"
+                                />
                             </View>
-                            <View style={styles.contactMeta}>
-                                <Text style={styles.contactLabel}>Guardian Contact</Text>
-                                <Text style={styles.contactValue}>{student.guardian}</Text>
+                        </View>
+                    </View>
+
+                    {/* Contact Information */}
+                    <View style={styles.card}>
+                        <Text style={styles.sectionLabel}>CONTACT DETAILS</Text>
+                        
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Phone Number</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="phone-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    keyboardType="phone-pad"
+                                    placeholder="Phone"
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Email Address</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="email-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    keyboardType="email-address"
+                                    placeholder="Email"
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Guardian Contact</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="account-group-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={guardian}
+                                    onChangeText={setGuardian}
+                                    placeholder="Guardian Details"
+                                />
                             </View>
                         </View>
                     </View>
 
                     {/* Actions */}
                     <View style={styles.actionRow}>
-                        <TouchableOpacity style={styles.editButton}>
-                            <MaterialCommunityIcons name="square-edit-outline" size={20} color="#374151" />
-                            <Text style={styles.editButtonText}>Edit Student</Text>
+                        <TouchableOpacity style={styles.saveButton} onPress={() => navigation.goBack()}>
+                            <MaterialCommunityIcons name="content-save-outline" size={24} color="#000" />
+                            <Text style={styles.saveButtonText}>Save Changes</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.deleteButton}>
                             <MaterialCommunityIcons name="delete-outline" size={20} color="#ef4444" />
@@ -160,7 +199,7 @@ const AdminStudentDetail = ({ navigation, route }) => {
                     </View>
                 </View>
 
-                <View style={{ height: 40 }} />
+                <View style={{ height: 60 }} />
             </ScrollView>
         </SafeAreaView>
     );
@@ -175,28 +214,26 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: spacing.lg,
+        paddingHorizontal: spacing.md,
         paddingVertical: 12,
         backgroundColor: '#fff',
         borderBottomWidth: 1,
         borderBottomColor: '#f3f4f6',
     },
     backButton: {
-        marginLeft: -10,
+        padding: spacing.xs,
     },
     headerTitle: {
-        fontSize: 18,
+        fontSize: typography.sizes.lg,
         fontWeight: 'bold',
-        color: '#111827',
+        color: colors.brandGrey,
     },
     content: {
         flex: 1,
     },
     profileCard: {
         backgroundColor: '#fff',
-        paddingTop: 24,
-        paddingBottom: 32,
-        paddingHorizontal: 24,
+        paddingVertical: 32,
         alignItems: 'center',
         borderBottomLeftRadius: 32,
         borderBottomRightRadius: 32,
@@ -215,179 +252,127 @@ const styles = StyleSheet.create({
         height: 112,
         borderRadius: 56,
         borderWidth: 2,
-        borderColor: '#fbbf24',
+        borderColor: colors.primary,
     },
-    activeBadge: {
+    editImageBadge: {
         position: 'absolute',
-        bottom: 4,
-        right: 4,
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: '#10b981',
-        borderWidth: 3,
+        bottom: 0,
+        right: 0,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: colors.brandGrey,
+        borderWidth: 2,
         borderColor: '#fff',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    studentName: {
+    studentNameDisplay: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: '#111827',
+        color: colors.brandGrey,
     },
-    studentDept: {
+    studentIdDisplay: {
         fontSize: 14,
         color: '#6b7280',
-        fontWeight: '500',
         marginTop: 4,
     },
-    badgeRow: {
-        flexDirection: 'row',
-        gap: 12,
-        marginTop: 20,
+    formContainer: {
+        padding: 20,
+        gap: 20,
     },
-    routeBadge: {
-        backgroundColor: '#fef3c7',
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: '#fde68a',
-    },
-    routeBadgeText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#92400e',
-    },
-    idBadge: {
-        backgroundColor: '#f3f4f6',
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-    },
-    idBadgeText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#4b5563',
-    },
-    infoContainer: {
-        padding: 24,
-        gap: 24,
-    },
-    sectionCard: {
+    card: {
         backgroundColor: '#fff',
         borderRadius: 20,
         padding: 20,
         borderWidth: 1,
         borderColor: '#f3f4f6',
+        gap: 16,
     },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 16,
-    },
-    sectionTitle: {
+    sectionLabel: {
         fontSize: 10,
         fontWeight: 'bold',
         color: '#9ca3af',
-        letterSpacing: 1.5,
+        letterSpacing: 1,
+        marginBottom: 4,
     },
-    infoRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 12,
+    inputGroup: {
+        gap: 6,
     },
-    infoLabel: {
-        fontSize: 14,
-        color: '#6b7280',
-    },
-    infoValue: {
+    inputLabel: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#111827',
-    },
-    divider: {
-        height: 1,
-        backgroundColor: '#f9fafb',
-    },
-    routeValueBadge: {
-        backgroundColor: '#fffbeb',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    routeValueText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#b45309',
-    },
-    contactItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingVertical: 10,
-    },
-    contactIconContainer: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
-    },
-    contactMeta: {
-        flex: 1,
-    },
-    contactLabel: {
-        fontSize: 10,
-        color: '#6b7280',
-    },
-    contactValue: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#111827',
-    },
-    actionRow: {
-        flexDirection: 'row',
-        gap: 12,
-        paddingTop: 8,
-    },
-    editButton: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        height: 56,
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-    },
-    editButtonText: {
-        fontSize: 14,
-        fontWeight: 'bold',
         color: '#374151',
     },
-    deleteButton: {
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f9fafb',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        height: 52,
+    },
+    inputIcon: {
+        marginRight: 10,
+    },
+    input: {
         flex: 1,
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.brandGrey,
+    },
+    pickerWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f9fafb',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        height: 52,
+    },
+    picker: {
+        flex: 1,
+        marginLeft: -10,
+    },
+    actionRow: {
+        gap: 12,
+        marginTop: 10,
+    },
+    saveButton: {
+        backgroundColor: colors.primary,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
         height: 56,
-        backgroundColor: '#fef2f2',
+        borderRadius: 16,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 4,
+    },
+    saveButtonText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#000',
+    },
+    deleteButton: {
+        backgroundColor: '#fff',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        height: 56,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: '#fee2e2',
     },
     deleteButtonText: {
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: 'bold',
         color: '#ef4444',
     },

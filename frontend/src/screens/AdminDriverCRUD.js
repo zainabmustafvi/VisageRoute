@@ -40,19 +40,11 @@ const AdminDriverCRUD = ({ navigation }) => {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity style={styles.menuButton}>
-                        <MaterialCommunityIcons name="menu" size={24} color="#6b7280" />
-                    </TouchableOpacity>
-                    <View>
-                        <Text style={styles.headerTitle}></Text>
-                        <Text style={styles.headerSubtitle}>Driver Management</Text>
-                    </View>
-                </View>
-                <TouchableOpacity style={styles.notificationButton}>
-                    <MaterialCommunityIcons name="bell-outline" size={24} color="#9ca3af" />
-                    <View style={styles.notificationDot} />
+                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+                    <MaterialCommunityIcons name="chevron-left" size={28} color="#4b5563" />
                 </TouchableOpacity>
+                <Text style={styles.headerTitle}>Driver Management</Text>
+                <View style={{ width: 40 }} />
             </View>
 
             <View style={styles.content}>
@@ -82,8 +74,6 @@ const AdminDriverCRUD = ({ navigation }) => {
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                 />
-
-                <Text style={styles.endText}>End of list</Text>
             </View>
         </SafeAreaView>
     );
@@ -98,51 +88,19 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: spacing.lg,
+        paddingHorizontal: spacing.md,
         paddingVertical: spacing.md,
         backgroundColor: colors.brandWhite,
         borderBottomWidth: 1,
         borderBottomColor: '#f3f4f6',
     },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    menuButton: {
+    backButton: {
         padding: spacing.xs,
-        marginRight: 12,
     },
     headerTitle: {
         fontSize: typography.sizes.lg,
         fontWeight: 'bold',
         color: colors.brandGrey,
-        lineHeight: 20,
-    },
-    headerSubtitle: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: '#9ca3af',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    notificationButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#f9fafb',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    notificationDot: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#ef4444',
-        borderWidth: 1,
-        borderColor: colors.brandWhite,
     },
     content: {
         flex: 1,
