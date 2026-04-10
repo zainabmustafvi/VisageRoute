@@ -113,9 +113,6 @@ const ParentTrackBus = ({ navigation }) => {
                         <MaterialIcons name="arrow-back" size={24} color="white" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Track Bus</Text>
-                    <TouchableOpacity style={styles.iconBtn}>
-                        <MaterialIcons name="notifications" size={24} color="white" />
-                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.statusCard}>
@@ -220,16 +217,6 @@ const ParentTrackBus = ({ navigation }) => {
                         </View>
                     </View>
 
-                    <View style={styles.actionRow}>
-                        <TouchableOpacity style={styles.callBtn}>
-                            <MaterialIcons name="call" size={18} color={Theme.colors.brandGrey} />
-                            <Text style={styles.callBtnText}>Call Driver</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.shareBtn}>
-                            <MaterialIcons name="share" size={18} color={Theme.colors.brandGrey} />
-                            <Text style={styles.shareBtnText}>Share ETA</Text>
-                        </TouchableOpacity>
-                    </View>
                 </View>
             </View>
         </SafeAreaView>

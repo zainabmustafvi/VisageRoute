@@ -39,7 +39,10 @@ const ParentHome = ({ navigation }) => {
                     <Text style={styles.headerAppName}>VisageRoute</Text>
                     <Text style={styles.headerSub}>PARENT PORTAL</Text>
                 </View>
-                <TouchableOpacity style={styles.notificationBtn}>
+                <TouchableOpacity 
+                    style={styles.notificationBtn}
+                    onPress={() => navigation.navigate('ParentAnnouncements')}
+                >
                     <MaterialIcons name="notifications" size={24} color="#9ca3af" />
                     <View style={styles.dot} />
                 </TouchableOpacity>
@@ -61,10 +64,7 @@ const ParentHome = ({ navigation }) => {
                 {/* Status Cards */}
                 <View style={styles.statusGrid}>
                     {/* Arrival Card */}
-                    <TouchableOpacity 
-                        style={[styles.card, styles.arrivalCard]} 
-                        onPress={() => navigation.navigate('ParentTrackBus')}
-                    >
+                    <View style={[styles.card, styles.arrivalCard]}>
                         <MaterialIcons name="directions-bus" size={80} color="rgba(0,0,0,0.1)" style={styles.bgIcon} />
                         <View style={styles.cardHeader}>
                             <View style={styles.cardIconBox}>
@@ -77,7 +77,7 @@ const ParentHome = ({ navigation }) => {
                             <View style={styles.busBadge}><Text style={styles.busBadgeText}>Bus #42</Text></View>
                             <Text style={styles.busSub}>to Home</Text>
                         </View>
-                    </TouchableOpacity>
+                    </View>
 
                     {/* Student Card */}
                     <TouchableOpacity style={[styles.card, styles.studentCard]}>
