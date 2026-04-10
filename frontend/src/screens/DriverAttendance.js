@@ -11,6 +11,16 @@ const { width } = Dimensions.get('window');
 const DriverAttendance = () => {
     const [permission, requestPermission] = useCameraPermissions();
     const [scannedStudent, setScannedStudent] = useState(null);
+    const [facing, setFacing] = useState('back');
+    const [flash, setFlash] = useState('off');
+
+    const toggleFacing = () => {
+        setFacing(current => (current === 'back' ? 'front' : 'back'));
+    };
+
+    const toggleFlash = () => {
+        setFlash(current => (current === 'off' ? 'on' : 'off'));
+    };
 
     useEffect(() => {
         if (!permission) {
@@ -63,7 +73,8 @@ const DriverAttendance = () => {
                     {/* REAL CAMERA FEED */}
                     <CameraView 
                         style={StyleSheet.absoluteFillObject}
-                        facing="back"
+                        facing={facing}
+                        flash={flash}
                     />
                     
                     <View style={styles.liveBadge}>
@@ -72,10 +83,14 @@ const DriverAttendance = () => {
                     </View>
 
                     <View style={styles.cameraControls}>
-                        <TouchableOpacity style={styles.controlBtn}>
-                            <MaterialIcons name="flash-off" size={20} color="#fff" />
+                        <TouchableOpacity style={styles.controlBtn} onPress={toggleFlash}>
+                            <MaterialIcons 
+                                name={flash === 'on' ? 'flash-on' : 'flash-off'} 
+                                size={20} 
+                                color="#fff" 
+                            />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.controlBtn}>
+                        <TouchableOpacity style={styles.controlBtn} onPress={toggleFacing}>
                             <MaterialIcons name="flip-camera-ios" size={20} color="#fff" />
                         </TouchableOpacity>
                     </View>

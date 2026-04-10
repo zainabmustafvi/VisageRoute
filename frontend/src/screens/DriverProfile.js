@@ -23,15 +23,7 @@ const DriverProfile = ({ navigation }) => {
 
             <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.profileSection}>
-                    <View style={styles.avatarContainer}>
-                        <Image
-                            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDwOEKQBTWBJknnI5pVE3BtnVoY1Dp_EPCpSn8hnWME4pWLEvuvfVCpZ5EMT1BXNv5tcP-94bT4rtt0Y9dzICq7GUPlofJCfRf8G6_k4irmqo97VUoQvwSt85VlPsYbTvUOh9MqLMpJjPxEvO6JRDV1uYwpPpfCTbQmbELsgfbW2e107-VzCcwiKGiQZYuj7begMSpcRlzskGunCABogsGAIi_gVxVh7B9NNxKddm-e9LrpoT15t6xvukeuKmBPzaJue-JSX1toUCg' }}
-                            style={styles.avatar}
-                        />
-                        <TouchableOpacity style={styles.editBadge}>
-                            <MaterialIcons name="edit" size={16} color={Theme.colors.brandGrey} />
-                        </TouchableOpacity>
-                    </View>
+                    {/* Avatar container removed as per request */}
                     <Text style={styles.driverName}>Sadaat Malik</Text>
                     <View style={styles.roleContainer}>
                         <View style={styles.statusBadge}>

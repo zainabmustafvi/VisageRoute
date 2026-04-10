@@ -55,10 +55,6 @@ const ParentSchedule = ({ navigation }) => {
                     <Text style={styles.headerTitle}>Weekly Schedule</Text>
                     <Text style={styles.headerSub}>PARENT PORTAL</Text>
                 </View>
-                <TouchableOpacity style={styles.notificationBtn}>
-                    <MaterialIcons name="notifications" size={24} color="#9ca3af" />
-                    <View style={styles.dot} />
-                </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -82,9 +78,6 @@ const ParentSchedule = ({ navigation }) => {
                             <Text style={styles.kidSub}>Bus #42 • Route A</Text>
                         </View>
                     </View>
-                    <TouchableOpacity style={styles.changeBtn}>
-                        <Text style={styles.changeBtnText}>Change</Text>
-                    </TouchableOpacity>
                 </View>
 
                 {/* Driver Details */}
@@ -102,10 +95,6 @@ const ParentSchedule = ({ navigation }) => {
                                 <Text style={styles.driverName}>Sadaat Malik</Text>
                                 <Text style={styles.driverPhone}>+1 (555) 012-3456</Text>
                             </View>
-                        </View>
-                        <View style={styles.driverActions}>
-                            <TouchableOpacity style={styles.circleBtn}><MaterialIcons name="call" size={18} color={Theme.colors.primary} /></TouchableOpacity>
-                            <TouchableOpacity style={[styles.circleBtn, { backgroundColor: '#f3f4f6' }]}><MaterialIcons name="chat-bubble" size={18} color="#9ca3af" /></TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -170,10 +159,6 @@ const ParentSchedule = ({ navigation }) => {
                     />
                 </View>
 
-                <TouchableOpacity style={styles.footerLink}>
-                    <Text style={styles.footerLinkText}>View Full Month</Text>
-                    <MaterialIcons name="chevron-right" size={16} color="#9ca3af" />
-                </TouchableOpacity>
             </ScrollView>
 
             {/* Bottom Nav Placeholder */}

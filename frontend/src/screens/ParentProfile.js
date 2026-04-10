@@ -45,13 +45,10 @@ const ParentProfile = ({ navigation }) => {
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                        <MaterialIcons name="menu" size={24} color={Theme.colors.brandGrey} />
+                        <MaterialIcons name="arrow-back" size={24} color={Theme.colors.brandGrey} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>My Profile</Text>
                 </View>
-                <TouchableOpacity style={styles.settingsBtn}>
-                    <MaterialIcons name="settings" size={24} color="#9ca3af" />
-                </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -110,14 +107,6 @@ const ParentProfile = ({ navigation }) => {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>SUPPORT</Text>
                     <View style={styles.supportCard}>
-                        <TouchableOpacity style={styles.supportItem}>
-                            <View style={styles.supportLeft}>
-                                <MaterialIcons name="help" size={20} color="#9ca3af" />
-                                <Text style={styles.supportText}>Help Center</Text>
-                            </View>
-                            <MaterialIcons name="chevron-right" size={20} color="#d1d5db" />
-                        </TouchableOpacity>
-                        <View style={styles.divider} />
                         <TouchableOpacity style={styles.supportItem} onPress={handleLogout}>
                             <View style={styles.supportLeft}>
                                 <MaterialIcons name="logout" size={20} color="#ef4444" />

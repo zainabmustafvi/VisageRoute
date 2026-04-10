@@ -96,7 +96,7 @@ const DriverRoute = () => {
                                     </View>
                                 </View>
                                 <Text style={styles.stopSubtitle}>
-                                    {stop.type === 'start' ? 'Start Point' : stop.type === 'end' ? 'Drop-off Point' : 'Bus Stop'} • {stop.students} Students waiting
+                                    {stop.type === 'start' ? 'Start Point' : stop.type === 'end' ? 'Drop-off Point' : 'Bus Stop'}
                                 </Text>
                             </View>
                         </View>

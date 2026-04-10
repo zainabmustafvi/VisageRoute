@@ -97,7 +97,7 @@ const ParentAnnouncements = ({ navigation }) => {
                 />
             </ScrollView>
 
-            {/* Bottom Nav Placeholder */}
+            {/* Bottom Nav */}
             <View style={styles.bottomNav}>
                  <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentHome')}>
                     <MaterialIcons name="home" size={28} color="#9ca3af" />
@@ -107,8 +107,12 @@ const ParentAnnouncements = ({ navigation }) => {
                     <MaterialIcons name="map" size={28} color="#9ca3af" />
                     <Text style={styles.navText}>Map</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentNotifications')}>
-                    <MaterialIcons name="notifications" size={28} color={Theme.colors.primary} />
+                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentSchedule')}>
+                    <MaterialIcons name="event-note" size={28} color="#9ca3af" />
+                    <Text style={styles.navText}>Schedule</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navItem}>
+                    <MaterialIcons name="feedback" size={28} color={Theme.colors.primary} />
                     <Text style={[styles.navText, { color: Theme.colors.primary }]}>Alerts</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentProfile')}>
