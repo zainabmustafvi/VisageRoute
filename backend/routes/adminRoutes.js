@@ -3,13 +3,21 @@ const router = express.Router();
 
 const { protect } = require('../middleware/authMiddleware');
 const { authorizeRoles } = require('../middleware/roleMiddleware');
-const { validateSchema, studentSchema, driverSchema, busRouteSchema } = require('../validators/adminValidator');
+const { 
+    validateSchema, 
+    studentSchema, 
+    driverSchema, 
+    busSchema,
+    busRouteSchema 
+} = require('../validators/adminValidator');
 
 const {
     getStudents,
     createStudent,
     getDrivers,
     createDriver,
+    getBuses,
+    createBus,
     getBusRoutes,
     createBusRoute,
     updateRouteSchedule
@@ -29,13 +37,17 @@ router.route('/drivers')
     .get(getDrivers)
     .post(validateSchema(driverSchema), createDriver);
 
-// Bus Route Routes
+// Bus (Vehicle) Routes
+router.route('/buses')
+    .get(getBuses)
+    .post(validateSchema(busSchema), createBus);
+
+// Bus Route (Path/Legacy) Routes
 router.route('/routes')
     .get(getBusRoutes)
     .post(validateSchema(busRouteSchema), createBusRoute);
 
 // Update Schedule
-// We don't apply the full busRouteSchema because this is a partial update focused on schedule
 router.put('/routes/:id/schedule', updateRouteSchedule);
 
 module.exports = router;

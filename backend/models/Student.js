@@ -5,21 +5,36 @@ const studentSchema = new mongoose.Schema({
         type: String,
         required: true,
         trim: true,
-        maxLength: 100, // Security: Length limit
+        maxLength: 100,
+    },
+    email: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    phone: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    address: {
+        type: String,
+        required: true,
+        trim: true,
     },
     parentId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true,
     },
-    busRouteId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'BusRoute',
-        required: false, // Can be assigned later by admin
+    faceEmbedding: {
+        type: [Number], // 128-d face embedding array
+        required: false,
     },
-    embeddingHash: {
-        type: String,
-        required: false, // Populated when face is registered
+    busId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Bus',
+        required: false,
     },
 }, { timestamps: true });
 

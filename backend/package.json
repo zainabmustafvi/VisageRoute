@@ -8,6 +8,9 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-cpu": "^4.22.0",
+    "@vladmandic/face-api": "^1.7.15",
     "axios": "^1.13.6",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
@@ -17,9 +20,11 @@
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^7.5.1",
     "helmet": "^7.2.0",
+    "jimp": "^1.6.1",
     "joi": "^17.13.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.23.0",
+    "nodemailer": "^8.0.7",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "zod": "^4.3.6"

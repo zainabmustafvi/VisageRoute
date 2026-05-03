@@ -13,8 +13,9 @@ const SLIDER_WIDTH = width - 48;
 const BUTTON_SIZE = 104;
 const SWIPE_RANGE = SLIDER_WIDTH - BUTTON_SIZE - 8;
 
-// ⚠️ Update to your machine's IP on the same Wi-Fi network
-const SOCKET_URL = 'http://192.168.0.106:5000';
+import { API_BASE_URL } from '../config/api';
+
+const SOCKET_URL = API_BASE_URL;
 const DRIVER_ROUTE_ID = '000000000000000000000001';
 
 const DriverHome = ({ navigation }) => {
