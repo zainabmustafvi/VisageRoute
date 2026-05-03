@@ -6,8 +6,9 @@ import * as SecureStore from 'expo-secure-store';
 import Theme from '../theme/Theme';
 import { globalStyles } from '../theme/globalStyles';
 
-// For physical devices or Expo testing, point this to your machine's Wi-Fi IP Address
-const API_URL = 'http://192.168.0.106:5000/api/auth';
+import { API_BASE_URL } from '../config/api';
+
+const API_URL = `${API_BASE_URL}/api/auth`;
 
 const LoginScreen = ({ navigation }) => {
     const [role, setRole] = useState('parent');

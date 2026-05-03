@@ -10,7 +10,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Theme from '../theme/Theme';
 
 // ⚠️ Update to your machine's IP on the same Wi-Fi network
-const SOCKET_URL = 'http://192.168.0.106:5000';
+import { API_BASE_URL } from '../config/api';
+const SOCKET_URL = API_BASE_URL;
 
 // Placeholder: In production, fetch the child's assigned routeId from the API
 const CHILD_ROUTE_ID = '000000000000000000000001';

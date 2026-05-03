@@ -108,7 +108,7 @@ const AdminHomeScreen = ({ navigation }) => {
                         {/* Upload Schedule */}
                         <TouchableOpacity style={styles.managementItem} onPress={() => navigation.navigate('UploadSchedule')}>
                             <View style={[styles.itemIconContainer, { backgroundColor: '#fef9c3' }]}>
-                                <MaterialCommunityIcons name="calendar-upload" size={20} color={colors.primary} />
+                                <MaterialCommunityIcons name="calendar-plus" size={20} color={colors.primary} />
                             </View>
                             <View style={styles.itemTextContainer}>
                                 <Text style={styles.itemTitle}>Upload Schedule</Text>
