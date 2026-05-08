@@ -22,6 +22,36 @@ const studentSchema = new mongoose.Schema({
         required: true,
         trim: true,
     },
+    parentName: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    parentEmail: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    department: {
+        type: String,
+        trim: true,
+    },
+    rollNo: {
+        type: String,
+        trim: true,
+    },
+    year: {
+        type: String,
+        trim: true,
+    },
+    semester: {
+        type: String,
+        trim: true,
+    },
+    pickupPoint: {
+        type: String,
+        trim: true,
+    },
     parentId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

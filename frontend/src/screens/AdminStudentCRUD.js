@@ -1,42 +1,102 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image, TextInput } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme/Theme';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
 
 const AdminStudentCRUD = ({ navigation }) => {
-    const [students, setStudents] = useState([
-        { id: '1', name: 'Ayesha Khan', studentId: '2024-001', dept: 'Computer Science', route: 'Route 4A', status: 'Active' },
-        { id: '2', name: 'Zaid Ahmed', studentId: '2024-045', dept: 'Engineering', route: 'Route 1B', status: 'Active' },
-        { id: '3', name: 'Fatima Ali', studentId: '2024-089', dept: 'Arts', route: 'Route 2C', status: 'Active' },
-    ]);
+    const [students, setStudents] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchStudents();
+        }, [])
+    );
+
+    const fetchStudents = async () => {
+        try {
+            setIsLoading(true);
+            const response = await axios.get(`${API_BASE_URL}/api/admin/students`);
+            setStudents(response.data);
+        } catch (error) {
+            console.error('Fetch error:', error);
+            Alert.alert('Error', 'Failed to fetch students list');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDelete = (id, name) => {
+        Alert.alert(
+            'Confirm Delete',
+            `Are you sure you want to delete ${name}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                    text: 'Delete', 
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await axios.delete(`${API_BASE_URL}/api/admin/students/${id}`);
+                            setStudents(students.filter(s => s._id !== id));
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to delete student');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const filteredStudents = students.filter(s => 
+        s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (s.rollNo && s.rollNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (s.email && s.email.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
 
     const renderStudentItem = ({ item }) => (
         <View style={styles.card}>
             <View style={styles.cardContent}>
                 <View style={styles.avatarContainer}>
-                    <View style={styles.avatarPlaceholder}>
-                        <MaterialCommunityIcons name="account" size={32} color="#9ca3af" />
-                    </View>
-                    <View style={styles.activeDot} />
+                    {item.imageBase64 ? (
+                        <Image source={{ uri: `data:image/jpeg;base64,${item.imageBase64}` }} style={styles.avatarImage} />
+                    ) : (
+                        <View style={styles.avatarPlaceholder}>
+                            <MaterialCommunityIcons name="account" size={32} color="#9ca3af" />
+                        </View>
+                    )}
                 </View>
                 <View style={styles.infoContainer}>
                     <Text style={styles.studentName}>{item.name}</Text>
-                    <Text style={styles.studentDept}>{item.dept}</Text>
+                    <Text style={styles.studentId}>ID: {item.rollNo || 'N/A'}</Text>
+                    <Text style={styles.studentDept}>{item.department || 'General'}</Text>
                     <View style={styles.metaRow}>
                         <View style={styles.metaBadgeYellow}>
-                            <Text style={styles.metaBadgeYellowText}>{item.route}</Text>
+                            <Text style={styles.metaBadgeYellowText}>{item.busId?.plateNumber || 'No Bus'}</Text>
                         </View>
                         <View style={styles.metaBadgeGrey}>
-                            <Text style={styles.metaBadgeGreyText}>ID: {item.studentId}</Text>
+                            <Text style={styles.metaBadgeGreyText}>{item.email}</Text>
                         </View>
                     </View>
                 </View>
+                <View style={styles.actionColumn}>
                 <TouchableOpacity 
-                    style={styles.detailsButton}
-                    onPress={() => navigation.navigate('AdminStudentDetail', { studentId: item.id })}
+                    style={styles.viewButton}
+                    onPress={() => navigation.navigate('AdminStudentDetail', { studentId: item._id })}
                 >
-                    <MaterialCommunityIcons name="chevron-right" size={24} color="#d1d5db" />
+                    <MaterialCommunityIcons name="eye-outline" size={22} color="#9ca3af" />
                 </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={styles.deleteButton}
+                        onPress={() => handleDelete(item._id, item.name)}
+                    >
+                        <MaterialCommunityIcons name="trash-can-outline" size={20} color="#ef4444" />
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );
@@ -48,31 +108,47 @@ const AdminStudentCRUD = ({ navigation }) => {
                     <MaterialCommunityIcons name="chevron-left" size={28} color="#4b5563" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Student Management</Text>
-                <View style={{ width: 40 }} />
+                <TouchableOpacity onPress={fetchStudents}>
+                    <MaterialCommunityIcons name="refresh" size={24} color="#4b5563" />
+                </TouchableOpacity>
             </View>
 
             <View style={styles.content}>
                 <View style={styles.searchBar}>
                     <MaterialCommunityIcons name="magnify" size={20} color="#9ca3af" style={styles.searchIcon} />
                     <TextInput 
-                        placeholder="Search by name or ID..." 
+                        placeholder="Search by name or email..." 
                         style={styles.searchInput}
                         placeholderTextColor="#9ca3af"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
                     />
                 </View>
 
-                <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('RegisterStudent')}>
+                <TouchableOpacity 
+                    style={styles.addButton} 
+                    onPress={() => navigation.navigate('RegisterStudent')}
+                >
                     <MaterialCommunityIcons name="account-plus" size={20} color="#111827" />
                     <Text style={styles.addButtonText}>Register New Student</Text>
                 </TouchableOpacity>
 
-                <FlatList
-                    data={students}
-                    renderItem={renderStudentItem}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={false}
-                />
+                {isLoading ? (
+                    <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+                ) : (
+                    <FlatList
+                        data={filteredStudents}
+                        renderItem={renderStudentItem}
+                        keyExtractor={item => item._id}
+                        contentContainerStyle={styles.listContent}
+                        showsVerticalScrollIndicator={false}
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Text style={styles.emptyText}>No students found</Text>
+                            </View>
+                        }
+                    />
+                )}
             </View>
         </SafeAreaView>
     );
@@ -172,6 +248,19 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#e5e7eb',
     },
+    avatarImage: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        borderWidth: 1,
+        borderColor: colors.primary,
+    },
+    studentId: {
+        fontSize: 11,
+        fontWeight: 'bold',
+        color: '#9ca3af',
+        marginTop: 1,
+    },
     activeDot: {
         position: 'absolute',
         bottom: 2,
@@ -229,6 +318,28 @@ const styles = StyleSheet.create({
     },
     detailsButton: {
         padding: 4,
+    },
+    actionColumn: {
+        gap: 12,
+        alignItems: 'center',
+    },
+    editButton: {
+        padding: 8,
+        backgroundColor: '#eef2ff',
+        borderRadius: 10,
+    },
+    deleteButton: {
+        padding: 8,
+        backgroundColor: '#fef2f2',
+        borderRadius: 10,
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        marginTop: 40,
+    },
+    emptyText: {
+        fontSize: 16,
+        color: '#9ca3af',
     },
 });
 
