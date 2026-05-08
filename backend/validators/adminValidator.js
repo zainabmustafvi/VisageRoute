@@ -21,16 +21,20 @@ const driverSchema = z.object({
     name: z.string().min(2).max(100).trim(),
     email: z.string().email("Invalid email format"),
     phone: z.string().min(10).max(15).trim(),
-    address: z.string().min(5).trim(),
+    employeeId: z.string().min(3).trim(),
+    address: z.string().optional(),
     licenseNumber: z.string().min(5).max(20).trim(),
-    busId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
+    licenseClass: z.enum(['Class A', 'Class B', 'Class C']),
+    licenseExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expiry must be in YYYY-MM-DD format"),
+    assignedBusId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
 });
 
-// Schema for creating a Bus (Vehicle)
 const busSchema = z.object({
+    busNumber: z.string().min(1, "Bus number is required").trim(),
     plateNumber: z.string().min(3).max(20).trim(),
-    model: z.string().min(2).max(50).trim(),
     capacity: z.number().int().positive().max(100),
+    gpsDeviceId: z.string().optional().nullable(),
+    status: z.enum(['available', 'in-use', 'maintenance']).optional(),
     driverId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
     assignedStudents: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/)).optional(),
 });

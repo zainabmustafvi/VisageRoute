@@ -1,20 +1,34 @@
 const mongoose = require('mongoose');
 
 const busSchema = new mongoose.Schema({
+    busNumber: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true,
+    },
     plateNumber: {
         type: String,
         required: true,
         unique: true,
         trim: true,
     },
-    model: {
-        type: String,
-        required: true,
-        trim: true,
-    },
     capacity: {
         type: Number,
         required: true,
+    },
+    gpsDeviceId: {
+        type: String,
+        unique: true,
+        sparse: true, // Allow nulls while maintaining uniqueness
+    },
+    status: {
+        type: String,
+        enum: ['available', 'in-use', 'maintenance'],
+        default: 'available',
+    },
+    lastMaintenance: {
+        type: Date,
     },
     driverId: {
         type: mongoose.Schema.Types.ObjectId,
