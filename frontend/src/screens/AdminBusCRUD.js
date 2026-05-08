@@ -1,31 +1,62 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, TextInput, Image, FlatList } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme/Theme';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
+import * as SecureStore from 'expo-secure-store';
 
 const AdminBusCRUD = ({ navigation }) => {
+    const [buses, setBuses] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
 
-    const [buses, setBuses] = useState([
-        { id: '1', busNumber: '101', plate: 'KA-05-AB-1234', capacity: 42, driver: 'Ramesh K.', status: 'Active' },
-        { id: '2', busNumber: '104', plate: 'KA-05-CJ-9982', capacity: 32, driver: 'Unassigned', status: 'Maintenance' },
-        { id: '3', busNumber: '105', plate: 'KA-05-XY-4567', capacity: 50, driver: 'Suresh M.', status: 'Active' },
-    ]);
+    useFocusEffect(
+        useCallback(() => {
+            fetchBuses();
+        }, [])
+    );
+
+    const fetchBuses = async () => {
+        try {
+            setIsLoading(true);
+            const token = await SecureStore.getItemAsync('socketToken');
+            const response = await axios.get(`${API_BASE_URL}/api/admin/buses`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setBuses(response.data);
+        } catch (error) {
+            console.error('Fetch error:', error);
+            Alert.alert('Error', 'Failed to fetch buses list');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const filteredBuses = buses.filter(b => 
+        (b.busNumber && b.busNumber.toLowerCase().includes(searchQuery.toLowerCase())) || 
+        (b.plateNumber && b.plateNumber.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
 
     const renderBusItem = ({ item }) => (
         <View style={styles.busCard}>
             <View style={styles.cardHeader}>
                 <View style={styles.cardHeaderLeft}>
-                    <View style={[styles.iconContainer, item.status === 'Active' ? styles.iconActive : styles.iconInactive]}>
-                        <MaterialCommunityIcons name="bus" size={24} color={item.status === 'Active' ? '#d97706' : '#9ca3af'} />
+                    <View style={[styles.iconContainer, item.status === 'available' ? styles.iconActive : styles.iconMaintenance]}>
+                        <MaterialCommunityIcons 
+                            name="bus" 
+                            size={24} 
+                            color={item.status === 'available' ? '#d97706' : '#ef4444'} 
+                        />
                     </View>
                     <View>
                         <Text style={styles.busTitle}>Bus #{item.busNumber}</Text>
-                        <Text style={styles.busPlate}>{item.plate}</Text>
+                        <Text style={styles.busPlate}>{item.plateNumber}</Text>
                     </View>
                 </View>
-                <View style={[styles.statusBadge, item.status === 'Active' ? styles.statusActive : styles.statusInactive]}>
-                    <Text style={[styles.statusText, item.status === 'Active' ? styles.statusTextActive : styles.statusTextInactive]}>
+                <View style={[styles.statusBadge, item.status === 'available' ? styles.statusActive : styles.statusMaintenance]}>
+                    <Text style={[styles.statusText, item.status === 'available' ? styles.statusTextActive : styles.statusTextMaintenance]}>
                         {item.status.toUpperCase()}
                     </Text>
                 </View>
@@ -38,18 +69,18 @@ const AdminBusCRUD = ({ navigation }) => {
                 </View>
                 <View style={styles.detailItem}>
                     <Text style={styles.detailLabel}>DRIVER</Text>
-                    <Text style={[styles.detailValue, item.driver === 'Unassigned' && styles.unassignedText]}>
-                        {item.driver}
+                    <Text style={[styles.detailValue, !item.driverId && styles.unassignedText]}>
+                        {item.driverId?.name || 'Unassigned'}
                     </Text>
                 </View>
             </View>
 
             <TouchableOpacity 
                 style={styles.updateButton}
-                onPress={() => navigation.navigate('AdminBusDetail', { busId: item.id })}
+                onPress={() => navigation.navigate('AdminBusDetail', { busId: item._id })}
             >
-                <MaterialCommunityIcons name="eye-outline" size={18} color="#111827" />
-                <Text style={styles.updateButtonText}>View Details</Text>
+                <MaterialCommunityIcons name="pencil-outline" size={18} color="#111827" />
+                <Text style={styles.updateButtonText}>Edit Details</Text>
             </TouchableOpacity>
         </View>
     );
@@ -61,18 +92,21 @@ const AdminBusCRUD = ({ navigation }) => {
                     <MaterialCommunityIcons name="chevron-left" size={28} color="#4b5563" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Bus Management</Text>
-                <View style={{ width: 40 }} />
+                <TouchableOpacity onPress={fetchBuses}>
+                    <MaterialCommunityIcons name="refresh" size={24} color="#4b5563" />
+                </TouchableOpacity>
             </View>
 
             <View style={styles.content}>
-                <View style={styles.pageHeader}>
-                    <View>
-                        <Text style={styles.title}>Bus Management</Text>
-                        <Text style={styles.subtitle}>Manage registration & details</Text>
-                    </View>
-                    <View style={styles.totalBadge}>
-                        <Text style={styles.totalText}>Total: 24</Text>
-                    </View>
+                <View style={styles.searchBar}>
+                    <MaterialCommunityIcons name="magnify" size={20} color="#9ca3af" style={styles.searchIcon} />
+                    <TextInput 
+                        placeholder="Search by bus number or plate..." 
+                        style={styles.searchInput}
+                        placeholderTextColor="#9ca3af"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
                 </View>
 
                 <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('RegisterBus')}>
@@ -80,13 +114,22 @@ const AdminBusCRUD = ({ navigation }) => {
                     <Text style={styles.addButtonText}>Add New Bus</Text>
                 </TouchableOpacity>
 
-                <FlatList
-                    data={buses}
-                    renderItem={renderBusItem}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={false}
-                />
+                {isLoading ? (
+                    <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+                ) : (
+                    <FlatList
+                        data={filteredBuses}
+                        renderItem={renderBusItem}
+                        keyExtractor={item => item._id}
+                        contentContainerStyle={styles.listContent}
+                        showsVerticalScrollIndicator={false}
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Text style={styles.emptyText}>No buses found</Text>
+                            </View>
+                        }
+                    />
+                )}
             </View>
         </SafeAreaView>
     );
@@ -117,47 +160,36 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
-        paddingHorizontal: spacing.lg,
-        paddingTop: spacing.lg,
+        padding: spacing.lg,
     },
-    pageHeader: {
+    searchBar: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-end',
-        marginBottom: spacing.lg,
-    },
-    title: {
-        fontSize: typography.sizes['2xl'],
-        fontWeight: 'bold',
-        color: colors.brandGrey,
-    },
-    subtitle: {
-        fontSize: typography.sizes.sm,
-        color: '#6b7280',
-        marginTop: 4,
-    },
-    totalBadge: {
+        alignItems: 'center',
         backgroundColor: colors.brandWhite,
         borderWidth: 1,
         borderColor: '#e5e7eb',
+        borderRadius: 12,
         paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 10,
+        height: 48,
+        marginBottom: spacing.md,
     },
-    totalText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#4b5563',
+    searchIcon: {
+        marginRight: 8,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 14,
+        color: colors.brandGrey,
     },
     addButton: {
         backgroundColor: colors.primary,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        height: 56,
+        height: 54,
         borderRadius: 16,
         gap: 8,
-        marginBottom: 24,
+        marginBottom: spacing.lg,
     },
     addButtonText: {
         fontSize: 16,
@@ -165,8 +197,8 @@ const styles = StyleSheet.create({
         color: colors.brandGrey,
     },
     listContent: {
-        gap: 16,
         paddingBottom: 40,
+        gap: 16,
     },
     busCard: {
         backgroundColor: colors.brandWhite,
@@ -199,8 +231,8 @@ const styles = StyleSheet.create({
     iconActive: {
         backgroundColor: '#fffbeb',
     },
-    iconInactive: {
-        backgroundColor: '#f9fafb',
+    iconMaintenance: {
+        backgroundColor: '#fef2f2',
     },
     busTitle: {
         fontSize: typography.sizes.lg,
@@ -223,9 +255,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#f0fdf4',
         borderColor: '#dcfce7',
     },
-    statusInactive: {
-        backgroundColor: '#f3f4f6',
-        borderColor: '#e5e7eb',
+    statusMaintenance: {
+        backgroundColor: '#fef2f2',
+        borderColor: '#fee2e2',
     },
     statusText: {
         fontSize: 10,
@@ -235,8 +267,8 @@ const styles = StyleSheet.create({
     statusTextActive: {
         color: '#15803d',
     },
-    statusTextInactive: {
-        color: '#4b5563',
+    statusTextMaintenance: {
+        color: '#ef4444',
     },
     detailsRow: {
         flexDirection: 'row',
@@ -279,6 +311,14 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: colors.brandGrey,
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        marginTop: 40,
+    },
+    emptyText: {
+        fontSize: 16,
+        color: '#9ca3af',
     },
 });
 

@@ -19,9 +19,15 @@ const driverSchema = new mongoose.Schema({
         trim: true,
         maxLength: 15,
     },
-    address: {
+    employeeId: {
         type: String,
         required: true,
+        unique: true,
+        trim: true,
+    },
+    address: {
+        type: String,
+        required: false,
         trim: true,
     },
     licenseNumber: {
@@ -31,13 +37,36 @@ const driverSchema = new mongoose.Schema({
         unique: true,
         maxLength: 20,
     },
-    userId: {
-        type: String, // Maps to the User collection if needed for auth linkage
-        required: false,
+    licenseClass: {
+        type: String,
+        required: true,
+        enum: ['Class A', 'Class B', 'Class C'],
+        default: 'Class C',
     },
-    routeId: {
+    licenseExpiry: {
+        type: Date,
+        required: true,
+    },
+    userId: {
+        type: String, // format: DR + number
+        required: true,
+        unique: true,
+    },
+    assignedBusId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'BusRoute',
+        ref: 'Bus',
+    },
+    rating: {
+        type: Number,
+        default: 5.0,
+    },
+    totalTrips: {
+        type: Number,
+        default: 0,
+    },
+    isActive: {
+        type: Boolean,
+        default: true,
     }
 }, { timestamps: true });
 

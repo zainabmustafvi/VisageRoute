@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     SafeAreaView, TextInput, StatusBar, Image, ActivityIndicator, Alert
@@ -9,26 +9,29 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { colors, typography, spacing } from '../theme/Theme';
 import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
-import { API_BASE_URL } from '../config/api'; // adjust path if needed
+import { API_BASE_URL } from '../config/api';
 
-const AdminRegisterStudent = ({ navigation }) => {
+const AdminRegisterStudent = ({ navigation, route }) => {
+    const studentData = route.params?.student;
+    const isEditMode = !!studentData;
+
     const [sendLogin, setSendLogin] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
 
     // Photo state
     const [photoUri, setPhotoUri] = useState(null);
     const [photoBase64, setPhotoBase64] = useState(null);
-    const [errors, setErrors] = useState({}); // Track field-specific errors
+    const [errors, setErrors] = useState({});
 
     // Form states
-    const [fullName, setFullName] = useState('');
-    const [email, setEmail] = useState('');
-    const [phone, setPhone] = useState('');
-    const [address, setAddress] = useState('');
-    const [parentName, setParentName] = useState('');
-    const [parentEmail, setParentEmail] = useState('');
-    const [department, setDepartment] = useState('');
-    const [routeId, setRouteId] = useState(''); // Corrected name to match schema
+    const [fullName, setFullName] = useState(studentData?.name || '');
+    const [email, setEmail] = useState(studentData?.email || '');
+    const [phone, setPhone] = useState(studentData?.phone || '');
+    const [address, setAddress] = useState(studentData?.address || '');
+    const [parentName, setParentName] = useState(studentData?.parentName || '');
+    const [parentEmail, setParentEmail] = useState(studentData?.parentEmail || '');
+    const [department, setDepartment] = useState(studentData?.department || '');
+    const [routeId, setRouteId] = useState(studentData?.busId || '');
 
     const handleFieldChange = (field, value, setter) => {
         setter(value);
@@ -39,19 +42,15 @@ const AdminRegisterStudent = ({ navigation }) => {
 
     // ─── Open Phone Gallery ───────────────────────────────────────────
     const handlePickPhoto = async () => {
-        // Request permission
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert(
-                'Permission Required',
-                'Please allow access to your photo gallery to select a student photo.'
-            );
+            Alert.alert('Permission Required', 'Please allow access to your photo gallery.');
             return;
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,     // Crop to square
+            allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
         });
@@ -59,11 +58,7 @@ const AdminRegisterStudent = ({ navigation }) => {
         if (!result.canceled && result.assets && result.assets.length > 0) {
             const asset = result.assets[0];
             setPhotoUri(asset.uri);
-
-            // Convert to base64 for backend transmission
-            const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-                encoding: 'base64',
-            });
+            const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' });
             setPhotoBase64(base64);
         }
     };
@@ -77,24 +72,29 @@ const AdminRegisterStudent = ({ navigation }) => {
         if (!address.trim()) newErrors.address = true;
         if (!parentName.trim()) newErrors.parentName = true;
         if (!parentEmail.trim() || !parentEmail.includes('@')) newErrors.parentEmail = true;
-        if (!photoBase64) newErrors.photo = true;
+        
+        // Photo is only strictly required for new registrations
+        if (!isEditMode && !photoBase64) newErrors.photo = true;
 
         setErrors(newErrors);
-
         if (Object.keys(newErrors).length > 0) {
-            Alert.alert('Validation Error', 'Please fill in all required fields marked in red.');
+            Alert.alert('Validation Error', 'Please fill in all required fields.');
             return false;
         }
         return true;
     };
 
-    // ─── Submit Registration ──────────────────────────────────────────
+    // ─── Submit Registration / Update ──────────────────────────────────
     const handleRegister = async () => {
         if (!validateForm()) return;
 
         setIsLoading(true);
         try {
-            const response = await axios.post(`${API_BASE_URL}/api/admin/students`, {
+            const url = isEditMode 
+                ? `${API_BASE_URL}/api/admin/students/${studentData._id}`
+                : `${API_BASE_URL}/api/admin/students`;
+            
+            const payload = {
                 name: fullName,
                 email,
                 phone,
@@ -104,32 +104,29 @@ const AdminRegisterStudent = ({ navigation }) => {
                 department,
                 routeId,
                 imageBase64: photoBase64,
-            }, { timeout: 30000 });
+            };
+
+            await axios({
+                method: isEditMode ? 'put' : 'post',
+                url: url,
+                data: payload,
+                timeout: 30000
+            });
 
             Alert.alert(
-                '✅ Registration Successful',
-                `${fullName} has been registered.\nLogin credentials have been sent to:\n${parentEmail}`,
-                [{ text: 'Done', onPress: () => navigation.goBack() }]
+                '✅ Success',
+                `Student ${isEditMode ? 'updated' : 'registered'} successfully.`,
+                [{ text: 'OK', onPress: () => navigation.goBack() }]
             );
         } catch (error) {
-            console.log('Registration error:', error.response?.data || error.message);
-            const message =
-                error.response?.data?.error ||
-                'Registration failed. Please try again.';
-
-            // Check specifically for face detection failure
-            if (message.includes('No face detected')) {
-                Alert.alert(
-                    '⚠️ No Face Detected',
-                    'No face detected. Please upload a clear photo of the student\'s face.\n\n• Ensure the face is well-lit\n• Use a passport-style front-facing photo\n• Avoid blurry or very small images'
-                );
-            } else {
-                Alert.alert('Registration Failed', message);
-            }
+            console.log('API Error:', error.response?.data || error.message);
+            const message = error.response?.data?.error || 'Operation failed. Please try again.';
+            Alert.alert('Error', message);
         } finally {
             setIsLoading(false);
         }
     };
+
 
     // ─── Render ───────────────────────────────────────────────────────
     return (
@@ -141,7 +138,7 @@ const AdminRegisterStudent = ({ navigation }) => {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <MaterialCommunityIcons name="chevron-left" size={28} color={colors.brandGrey} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Register Student</Text>
+                <Text style={styles.headerTitle}>{isEditMode ? 'Update Student' : 'Register Student'}</Text>
                 <View style={{ width: 40 }} />
             </View>
 
@@ -151,7 +148,7 @@ const AdminRegisterStudent = ({ navigation }) => {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Student Photo</Text>
                     <Text style={styles.sectionSubtitle}>
-                        Upload a clear, front-facing photo. This will be used for the attendance system.
+                        {isEditMode ? 'Update student photo (optional).' : 'Upload a clear, front-facing photo. This will be used for the attendance system.'}
                     </Text>
 
                     <TouchableOpacity 
@@ -360,7 +357,7 @@ const AdminRegisterStudent = ({ navigation }) => {
                         <ActivityIndicator size="small" color="#000" />
                     ) : (
                         <>
-                            <Text style={styles.primaryButtonText}>Register</Text>
+                            <Text style={styles.primaryButtonText}>{isEditMode ? 'Update' : 'Register'}</Text>
                             <MaterialCommunityIcons name="check-circle" size={20} color="#000" />
                         </>
                     )}

@@ -1,15 +1,130 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, TextInput, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+    View, Text, StyleSheet, ScrollView, TouchableOpacity, 
+    SafeAreaView, TextInput, StatusBar, ActivityIndicator, Alert 
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme/Theme';
 import { Picker } from '@react-native-picker/picker';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
+import * as SecureStore from 'expo-secure-store';
 
 const AdminBusDetail = ({ navigation, route }) => {
+    const { busId: paramId } = route.params;
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [availableDrivers, setAvailableDrivers] = useState([]);
+
     // Form States
-    const [busNumber, setBusNumber] = useState('101');
-    const [regNumber, setRegNumber] = useState('KA-05-AB-1234');
-    const [capacity, setCapacity] = useState('42');
-    const [selectedDriver, setSelectedDriver] = useState('ramesh');
+    const [busNumber, setBusNumber] = useState('');
+    const [plateNumber, setPlateNumber] = useState('');
+    const [capacity, setCapacity] = useState('');
+    const [gpsDeviceId, setGpsDeviceId] = useState('');
+    const [status, setStatus] = useState('available');
+    const [selectedDriverId, setSelectedDriverId] = useState('');
+
+    useEffect(() => {
+        fetchData();
+    }, [paramId]);
+
+    const fetchData = async () => {
+        try {
+            setIsLoading(true);
+            const token = await SecureStore.getItemAsync('socketToken');
+            const [busRes, driversRes] = await Promise.all([
+                axios.get(`${API_BASE_URL}/api/admin/buses`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }),
+                axios.get(`${API_BASE_URL}/api/admin/available-drivers`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+            ]);
+
+            const bus = busRes.data.find(b => b._id === paramId);
+            if (!bus) throw new Error('Bus not found');
+
+            setBusNumber(bus.busNumber || '');
+            setPlateNumber(bus.plateNumber || '');
+            setCapacity(bus.capacity?.toString() || '');
+            setGpsDeviceId(bus.gpsDeviceId || '');
+            setStatus(bus.status || 'available');
+            setSelectedDriverId(bus.driverId?._id || '');
+
+            // Add the current driver to the list of available drivers so we can select them again
+            let drivers = driversRes.data;
+            if (bus.driverId && !drivers.find(d => d._id === bus.driverId._id)) {
+                drivers = [bus.driverId, ...drivers];
+            }
+            setAvailableDrivers(drivers);
+        } catch (error) {
+            console.error('Fetch error:', error);
+            Alert.alert('Error', 'Failed to fetch bus details');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSave = async () => {
+        try {
+            setIsSaving(true);
+            const token = await SecureStore.getItemAsync('socketToken');
+            const payload = {
+                busNumber,
+                plateNumber: plateNumber.toUpperCase(),
+                capacity: parseInt(capacity),
+                driverId: selectedDriverId || null,
+                gpsDeviceId: gpsDeviceId || null,
+                status
+            };
+
+            await axios.put(`${API_BASE_URL}/api/admin/buses/${paramId}`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            Alert.alert('Success', 'Bus updated successfully', [
+                { text: 'OK', onPress: () => navigation.goBack() }
+            ]);
+        } catch (error) {
+            console.error('Save error:', error.response?.data || error.message);
+            Alert.alert('Error', error.response?.data?.error || 'Failed to update bus');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDelete = () => {
+        Alert.alert(
+            'Confirm Delete',
+            'Are you sure you want to delete this bus? This action cannot be undone.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                    text: 'Delete', 
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const token = await SecureStore.getItemAsync('socketToken');
+                            await axios.delete(`${API_BASE_URL}/api/admin/buses/${paramId}`, {
+                                headers: { Authorization: `Bearer ${token}` }
+                            });
+                            navigation.goBack();
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to delete bus');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    if (isLoading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -17,15 +132,10 @@ const AdminBusDetail = ({ navigation, route }) => {
             
             {/* Header */}
             <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <MaterialCommunityIcons name="chevron-left" size={28} color={colors.brandGrey} />
-                    </TouchableOpacity>
-                    <View>
-                        <Text style={styles.headerTitle}>Edit Bus Details</Text>
-                        <Text style={styles.headerSubtitle}>ADMIN PORTAL</Text>
-                    </View>
-                </View>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <MaterialCommunityIcons name="chevron-left" size={28} color={colors.brandGrey} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Edit Bus</Text>
                 <View style={{ width: 40 }} />
             </View>
 
@@ -35,8 +145,10 @@ const AdminBusDetail = ({ navigation, route }) => {
                         <Text style={styles.busTitle}>Bus #{busNumber}</Text>
                         <Text style={styles.busSubtitle}>Update information below</Text>
                     </View>
-                    <View style={styles.statusBadge}>
-                        <Text style={styles.statusText}>ACTIVE</Text>
+                    <View style={[styles.statusBadge, status === 'available' ? styles.statusActive : styles.statusMaintenance]}>
+                        <Text style={[styles.statusText, status === 'available' ? styles.statusTextActive : styles.statusTextMaintenance]}>
+                            {status.toUpperCase()}
+                        </Text>
                     </View>
                 </View>
 
@@ -49,12 +161,7 @@ const AdminBusDetail = ({ navigation, route }) => {
                             <Text style={styles.inputLabel}>Bus Number</Text>
                             <View style={styles.inputWrapper}>
                                 <MaterialCommunityIcons name="bus" size={20} color="#9ca3af" style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    value={busNumber}
-                                    onChangeText={setBusNumber}
-                                    placeholder="e.g. 101"
-                                />
+                                <TextInput style={styles.input} value={busNumber} onChangeText={setBusNumber} placeholder="e.g. 101" />
                             </View>
                         </View>
 
@@ -64,8 +171,8 @@ const AdminBusDetail = ({ navigation, route }) => {
                                 <MaterialCommunityIcons name="identifier" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <TextInput
                                     style={[styles.input, { textTransform: 'uppercase' }]}
-                                    value={regNumber}
-                                    onChangeText={setRegNumber}
+                                    value={plateNumber}
+                                    onChangeText={setPlateNumber}
                                     autoCapitalize="characters"
                                 />
                             </View>
@@ -83,6 +190,22 @@ const AdminBusDetail = ({ navigation, route }) => {
                                 />
                             </View>
                         </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Status</Text>
+                            <View style={styles.pickerWrapper}>
+                                <MaterialCommunityIcons name="list-status" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <Picker
+                                    selectedValue={status}
+                                    onValueChange={(v) => setStatus(v)}
+                                    style={styles.picker}
+                                >
+                                    <Picker.Item label="Available" value="available" />
+                                    <Picker.Item label="In Use" value="in-use" />
+                                    <Picker.Item label="Maintenance" value="maintenance" />
+                                </Picker>
+                            </View>
+                        </View>
                     </View>
 
                     {/* Personnel */}
@@ -94,14 +217,14 @@ const AdminBusDetail = ({ navigation, route }) => {
                             <View style={styles.pickerWrapper}>
                                 <MaterialCommunityIcons name="badge-account-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <Picker
-                                    selectedValue={selectedDriver}
-                                    onValueChange={(v) => setSelectedDriver(v)}
+                                    selectedValue={selectedDriverId}
+                                    onValueChange={(v) => setSelectedDriverId(v)}
                                     style={styles.picker}
                                 >
-                                    <Picker.Item label="Ramesh K." value="ramesh" />
-                                    <Picker.Item label="Suresh M." value="suresh" />
-                                    <Picker.Item label="Rajesh P." value="rajesh" />
-                                    <Picker.Item label="Unassigned" value="unassigned" />
+                                    <Picker.Item label="Unassigned" value="" />
+                                    {availableDrivers.map(driver => (
+                                        <Picker.Item key={driver._id} label={`${driver.name} (${driver.employeeId || 'N/A'})`} value={driver._id} />
+                                    ))}
                                 </Picker>
                             </View>
                             <Text style={styles.helpText}>Select a new driver to reassign automatically.</Text>
@@ -110,13 +233,23 @@ const AdminBusDetail = ({ navigation, route }) => {
 
                     {/* Actions */}
                     <View style={styles.actionRow}>
-                        <TouchableOpacity style={styles.saveButton}>
-                            <MaterialCommunityIcons name="content-save-outline" size={24} color="#fff" />
-                            <Text style={styles.saveButtonText}>Save Changes</Text>
+                        <TouchableOpacity 
+                            style={[styles.saveButton, isSaving && { opacity: 0.7 }]} 
+                            onPress={handleSave}
+                            disabled={isSaving}
+                        >
+                            {isSaving ? (
+                                <ActivityIndicator color="#000" />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons name="content-save-outline" size={24} color="#000" />
+                                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
                         
-                        <TouchableOpacity style={styles.deleteButton}>
-                            <MaterialCommunityIcons name="delete-outline" size={24} color="#ef4444" />
+                        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                            <MaterialCommunityIcons name="trash-can-outline" size={20} color="#ef4444" />
                             <Text style={styles.deleteButtonText}>Delete Bus</Text>
                         </TouchableOpacity>
                     </View>
@@ -143,11 +276,6 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#f3f4f6',
     },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
     backButton: {
         padding: spacing.xs,
     },
@@ -155,26 +283,6 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#111827',
-    },
-    headerSubtitle: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: '#9ca3af',
-        letterSpacing: 1,
-    },
-    notificationButton: {
-        padding: 8,
-    },
-    notificationDot: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        width: 8,
-        height: 8,
-        backgroundColor: colors.primary,
-        borderRadius: 4,
-        borderWidth: 1.5,
-        borderColor: '#fff',
     },
     content: {
         flex: 1,
@@ -197,17 +305,28 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     statusBadge: {
-        backgroundColor: '#f0fdf4',
         paddingHorizontal: 12,
         paddingVertical: 4,
         borderRadius: 8,
         borderWidth: 1,
+    },
+    statusActive: {
+        backgroundColor: '#f0fdf4',
         borderColor: '#dcfce7',
+    },
+    statusMaintenance: {
+        backgroundColor: '#fef2f2',
+        borderColor: '#fee2e2',
     },
     statusText: {
         fontSize: 12,
         fontWeight: 'bold',
+    },
+    statusTextActive: {
         color: '#15803d',
+    },
+    statusTextMaintenance: {
+        color: '#ef4444',
     },
     form: {
         gap: 20,
@@ -299,7 +418,7 @@ const styles = StyleSheet.create({
     saveButtonText: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#fff',
+        color: '#000',
     },
     deleteButton: {
         backgroundColor: '#fff',

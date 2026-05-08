@@ -1,23 +1,127 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, TextInput, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+    View, Text, StyleSheet, ScrollView, TouchableOpacity, 
+    SafeAreaView, TextInput, StatusBar, ActivityIndicator, Alert 
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme/Theme';
 import { Picker } from '@react-native-picker/picker';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
+import * as SecureStore from 'expo-secure-store';
 
 const AdminRegisterDriver = ({ navigation }) => {
-    // Personal Info
+    const [isLoading, setIsLoading] = useState(false);
+    const [availableBuses, setAvailableBuses] = useState([]);
+    const [errors, setErrors] = useState({});
+
+    // Form States
     const [fullName, setFullName] = useState('');
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
     const [employeeId, setEmployeeId] = useState('');
-
-    // License Details
     const [licenseNo, setLicenseNo] = useState('');
     const [licenseClass, setLicenseClass] = useState('Class C');
     const [expiration, setExpiration] = useState('');
+    const [assignedBusId, setAssignedBusId] = useState('');
 
-    // Assignment
-    const [route, setRoute] = useState('');
+    useEffect(() => {
+        fetchAvailableBuses();
+    }, []);
+
+    const fetchAvailableBuses = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            const response = await axios.get(`${API_BASE_URL}/api/admin/available-buses`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setAvailableBuses(response.data);
+        } catch (error) {
+            console.error('Error fetching buses:', error);
+        }
+    };
+
+    const validateForm = () => {
+        let newErrors = {};
+        if (!fullName.trim()) newErrors.fullName = "Full name is required";
+        if (!phone.trim()) newErrors.phone = "Phone number is required";
+        if (!email.trim() || !email.includes('@')) newErrors.email = "Valid email is required";
+        if (!employeeId.trim()) newErrors.employeeId = "Employee ID is required";
+        if (!licenseNo.trim()) newErrors.licenseNo = "License number is required";
+        if (!expiration.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(expiration)) {
+            newErrors.expiration = "Format: YYYY-MM-DD";
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleRegister = async () => {
+        if (!validateForm()) {
+            Alert.alert('Validation Error', 'Please correct the highlighted fields.');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            const payload = {
+                name: fullName,
+                email,
+                phone,
+                employeeId,
+                licenseNumber: licenseNo,
+                licenseClass,
+                licenseExpiry: expiration,
+                assignedBusId: assignedBusId || null
+            };
+
+            const response = await axios.post(`${API_BASE_URL}/api/admin/drivers`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            Alert.alert(
+                '✅ Success',
+                'Driver registered successfully. Login credentials have been sent to their email.',
+                [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+        } catch (error) {
+            console.error('Registration Error:', error.response?.data || error.message);
+            const errorMsg = error.response?.data?.error || 'Failed to register driver. Please try again.';
+            
+            if (errorMsg.toLowerCase().includes('email')) {
+                setErrors(prev => ({ ...prev, email: 'Email already exists' }));
+            } else if (errorMsg.toLowerCase().includes('license')) {
+                setErrors(prev => ({ ...prev, licenseNo: 'License already exists' }));
+            }
+            
+            Alert.alert('Error', errorMsg);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const renderInput = (label, value, setter, placeholder, icon, keyboardType = 'default', errorKey) => (
+        <View style={styles.inputGroup}>
+            <Text style={styles.label}>{label}</Text>
+            <View style={[styles.inputWrapper, errors[errorKey] && styles.inputError]}>
+                <MaterialCommunityIcons name={icon} size={20} color={errors[errorKey] ? colors.error : "#9ca3af"} style={styles.inputIcon} />
+                <TextInput
+                    style={styles.inputInner}
+                    placeholder={placeholder}
+                    placeholderTextColor="#9ca3af"
+                    value={value}
+                    onChangeText={(v) => {
+                        setter(v);
+                        if (errors[errorKey]) setErrors(prev => ({ ...prev, [errorKey]: null }));
+                    }}
+                    keyboardType={keyboardType}
+                    autoCapitalize={keyboardType === 'email-address' ? 'none' : 'words'}
+                />
+            </View>
+            {errors[errorKey] && <Text style={styles.errorText}>{errors[errorKey]}</Text>}
+        </View>
+    );
 
     return (
         <SafeAreaView style={styles.container}>
@@ -38,72 +142,30 @@ const AdminRegisterDriver = ({ navigation }) => {
                 {/* Personal Information */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
-                        <MaterialCommunityIcons name="account-outline" size={24} color={colors.primary} />
+                        <View style={styles.iconCircle}>
+                            <MaterialCommunityIcons name="account-outline" size={20} color="#000" />
+                        </View>
                         <Text style={styles.cardTitle}>Personal Information</Text>
                     </View>
                     <View style={styles.form}>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>FULL NAME</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="ex. Sadaat Malik"
-                                placeholderTextColor="#9ca3af"
-                                value={fullName}
-                                onChangeText={setFullName}
-                            />
-                        </View>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>PHONE NUMBER</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="(555) 000-0000"
-                                placeholderTextColor="#9ca3af"
-                                value={phone}
-                                onChangeText={setPhone}
-                                keyboardType="phone-pad"
-                            />
-                        </View>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>EMAIL ADDRESS</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="driver@saferoute.edu"
-                                placeholderTextColor="#9ca3af"
-                                value={email}
-                                onChangeText={setEmail}
-                                keyboardType="email-address"
-                            />
-                        </View>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>EMPLOYEE ID</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="ID-123456"
-                                placeholderTextColor="#9ca3af"
-                                value={employeeId}
-                                onChangeText={setEmployeeId}
-                            />
-                        </View>
+                        {renderInput("FULL NAME", fullName, setFullName, "ex. Sadaat Malik", "account", "default", "fullName")}
+                        {renderInput("PHONE NUMBER", phone, setPhone, "0300 1234567", "phone", "phone-pad", "phone")}
+                        {renderInput("EMAIL ADDRESS", email, setEmail, "driver@visageroute.com", "email", "email-address", "email")}
+                        {renderInput("EMPLOYEE ID", employeeId, setEmployeeId, "EMP-1023", "card-account-details", "default", "employeeId")}
                     </View>
                 </View>
 
                 {/* License Details */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
-                        <MaterialCommunityIcons name="badge-account-outline" size={24} color={colors.primary} />
+                        <View style={styles.iconCircle}>
+                            <MaterialCommunityIcons name="badge-account-outline" size={20} color="#000" />
+                        </View>
                         <Text style={styles.cardTitle}>License Details</Text>
                     </View>
                     <View style={styles.form}>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>LICENSE NUMBER</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="DL-88997766"
-                                placeholderTextColor="#9ca3af"
-                                value={licenseNo}
-                                onChangeText={setLicenseNo}
-                            />
-                        </View>
+                        {renderInput("LICENSE NUMBER", licenseNo, setLicenseNo, "DL-88997766", "license", "default", "licenseNo")}
+                        
                         <View style={styles.row}>
                             <View style={[styles.inputGroup, { flex: 1 }]}>
                                 <Text style={styles.label}>CLASS</Text>
@@ -121,13 +183,20 @@ const AdminRegisterDriver = ({ navigation }) => {
                             </View>
                             <View style={[styles.inputGroup, { flex: 1.2 }]}>
                                 <Text style={styles.label}>EXPIRATION</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="YYYY-MM-DD"
-                                    placeholderTextColor="#9ca3af"
-                                    value={expiration}
-                                    onChangeText={setExpiration}
-                                />
+                                <View style={[styles.inputWrapper, errors.expiration && styles.inputError]}>
+                                    <MaterialCommunityIcons name="calendar" size={18} color={errors.expiration ? colors.error : "#9ca3af"} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.inputInner}
+                                        placeholder="YYYY-MM-DD"
+                                        placeholderTextColor="#9ca3af"
+                                        value={expiration}
+                                        onChangeText={(v) => {
+                                            setExpiration(v);
+                                            if (errors.expiration) setErrors(prev => ({ ...prev, expiration: null }));
+                                        }}
+                                    />
+                                </View>
+                                {errors.expiration && <Text style={styles.errorText}>{errors.expiration}</Text>}
                             </View>
                         </View>
                     </View>
@@ -136,38 +205,50 @@ const AdminRegisterDriver = ({ navigation }) => {
                 {/* Bus Assignment */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
-                        <MaterialCommunityIcons name="bus" size={24} color={colors.primary} />
+                        <View style={styles.iconCircle}>
+                            <MaterialCommunityIcons name="bus" size={20} color="#000" />
+                        </View>
                         <Text style={styles.cardTitle}>Bus Assignment</Text>
                     </View>
                     <View style={styles.form}>
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>ASSIGNED ROUTE</Text>
+                            <Text style={styles.label}>ASSIGN TO BUS (OPTIONAL)</Text>
                             <View style={styles.pickerWrapper}>
-                                <MaterialCommunityIcons name="map-marker-path" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <MaterialCommunityIcons name="bus-side" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <Picker
-                                    selectedValue={route}
-                                    onValueChange={(v) => setRoute(v)}
+                                    selectedValue={assignedBusId}
+                                    onValueChange={(v) => setAssignedBusId(v)}
                                     style={styles.picker}
                                 >
-                                    <Picker.Item label="Select a route..." value="" />
-                                    <Picker.Item label="Route 101 - North Campus Loop" value="r1" />
-                                    <Picker.Item label="Route 204 - Downtown Connector" value="r2" />
-                                    <Picker.Item label="Route 305 - Stadium Shuttle" value="r3" />
-                                    <Picker.Item label="Unassigned (Pool)" value="unassigned" />
+                                    <Picker.Item label="Select a bus..." value="" />
+                                    {availableBuses.map(bus => (
+                                        <Picker.Item key={bus._id} label={`${bus.plateNumber} (${bus.model})`} value={bus._id} />
+                                    ))}
                                 </Picker>
                             </View>
+                            <Text style={styles.hintText}>Only showing buses without assigned drivers.</Text>
                         </View>
                     </View>
                 </View>
 
-                <View style={{ height: 40 }} />
+                <View style={{ height: 100 }} />
             </ScrollView>
 
             {/* Sticky Bottom Action */}
             <View style={styles.footer}>
-                <TouchableOpacity style={styles.registerButton}>
-                    <MaterialCommunityIcons name="check-circle" size={24} color="#000" />
-                    <Text style={styles.registerButtonText}>Register Driver</Text>
+                <TouchableOpacity 
+                    style={[styles.registerButton, isLoading && styles.disabledButton]} 
+                    onPress={handleRegister}
+                    disabled={isLoading}
+                >
+                    {isLoading ? (
+                        <ActivityIndicator color="#000" />
+                    ) : (
+                        <>
+                            <MaterialCommunityIcons name="check-circle" size={24} color="#000" />
+                            <Text style={styles.registerButtonText}>Register Driver</Text>
+                        </>
+                    )}
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -177,7 +258,7 @@ const AdminRegisterDriver = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8f8f5',
+        backgroundColor: colors.backgroundLight,
     },
     header: {
         flexDirection: 'row',
@@ -185,7 +266,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: spacing.lg,
         paddingVertical: 12,
-        backgroundColor: '#f8f8f5',
+        backgroundColor: colors.backgroundLight,
         borderBottomWidth: 1,
         borderBottomColor: '#e5e7eb',
     },
@@ -209,6 +290,7 @@ const styles = StyleSheet.create({
     },
     scrollPadding: {
         padding: spacing.lg,
+        paddingBottom: 40,
         gap: 20,
     },
     card: {
@@ -225,8 +307,16 @@ const styles = StyleSheet.create({
     cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginBottom: 16,
+        gap: 12,
+        marginBottom: 20,
+    },
+    iconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     cardTitle: {
         fontSize: 16,
@@ -246,16 +336,34 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
         marginLeft: 2,
     },
-    input: {
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: '#f9fafb',
         borderWidth: 1,
         borderColor: '#e5e7eb',
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        height: 48,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        height: 52,
+    },
+    inputIcon: {
+        marginRight: 8,
+    },
+    inputInner: {
+        flex: 1,
         fontSize: 14,
         color: colors.brandGrey,
         fontWeight: '500',
+    },
+    inputError: {
+        borderColor: colors.error,
+        backgroundColor: '#fff5f5',
+    },
+    errorText: {
+        fontSize: 11,
+        color: colors.error,
+        marginLeft: 4,
+        marginTop: 2,
     },
     row: {
         flexDirection: 'row',
@@ -267,19 +375,26 @@ const styles = StyleSheet.create({
         backgroundColor: '#f9fafb',
         borderWidth: 1,
         borderColor: '#e5e7eb',
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        height: 48,
+        borderRadius: 10,
+        paddingHorizontal: 8,
+        height: 52,
     },
     picker: {
         flex: 1,
-        height: 48,
-        marginLeft: -10,
+        height: 52,
+        color: colors.brandGrey,
     },
-    inputIcon: {
-        marginRight: 4,
+    hintText: {
+        fontSize: 11,
+        color: '#9ca3af',
+        fontStyle: 'italic',
+        marginTop: 2,
     },
     footer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
         padding: spacing.lg,
         paddingBottom: 32,
         backgroundColor: 'rgba(248, 248, 245, 0.95)',
@@ -292,12 +407,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         height: 56,
-        borderRadius: 12,
-        gap: 8,
+        borderRadius: 14,
+        gap: 10,
         shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
+        shadowOpacity: 0.3,
         shadowRadius: 8,
+        elevation: 4,
+    },
+    disabledButton: {
+        opacity: 0.6,
     },
     registerButtonText: {
         fontSize: 18,
