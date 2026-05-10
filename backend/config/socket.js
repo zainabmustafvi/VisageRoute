@@ -50,6 +50,9 @@ const initSocket = (server) => {
         const { _id, role } = socket.user;
         console.log(`[Socket.io] Connected: ID=${socket.id} | UserID=${_id} | Role=${role}`);
 
+        // Join private room for targeted notifications
+        socket.join(_id.toString());
+
         // ── JOIN ROUTE ROOM ──────────────────────────────────────────────────
         // Both drivers and parents call this to subscribe to a route's updates
         socket.on('joinRouteRoom', (routeId) => {

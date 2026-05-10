@@ -1,20 +1,160 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Animated } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+    View, Text, StyleSheet, ScrollView, TouchableOpacity, 
+    StatusBar, Animated, Alert, ActivityIndicator 
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme/Theme';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
+import * as SecureStore from 'expo-secure-store';
+import { useFocusEffect } from '@react-navigation/native';
 
 const AdminUploadSchedule = ({ navigation }) => {
     const [isUploading, setIsUploading] = useState(false);
-    const [progress, setProgress] = useState(new Animated.Value(0));
+    const [uploadProgress, setUploadProgress] = useState(0);
     const [selectedFile, setSelectedFile] = useState(null);
+    const [recentUploads, setRecentUploads] = useState([]);
+    const [isLoadingRecent, setIsLoadingRecent] = useState(true);
 
-    const handleUpload = () => {
-        setIsUploading(true);
-        Animated.timing(progress, {
-            toValue: 0.45,
-            duration: 2000,
-            useNativeDriver: false,
-        }).start();
+    useFocusEffect(
+        useCallback(() => {
+            fetchRecentUploads();
+        }, [])
+    );
+
+    const fetchRecentUploads = async () => {
+        try {
+            setIsLoadingRecent(true);
+            const token = await SecureStore.getItemAsync('socketToken');
+            const response = await axios.get(`${API_BASE_URL}/api/admin/recent-uploads`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setRecentUploads(response.data);
+        } catch (error) {
+            console.error('Fetch error:', error);
+        } finally {
+            setIsLoadingRecent(false);
+        }
+    };
+
+    const pickDocument = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: '*/*', // Allow all files and validate manually for better compatibility
+                copyToCacheDirectory: true
+            });
+
+            if (!result.canceled) {
+                const file = result.assets[0];
+                const fileName = file.name.toLowerCase();
+                
+                // Validate extension
+                if (!fileName.endsWith('.csv') && !fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+                    Alert.alert('Invalid Format', 'Please select a CSV or Excel (.xlsx, .xls) file.');
+                    return;
+                }
+
+                // Check size (5MB limit)
+                if (file.size > 5 * 1024 * 1024) {
+                    Alert.alert('Error', 'File size exceeds 5MB limit');
+                    return;
+                }
+                setSelectedFile(file);
+            }
+        } catch (err) {
+            console.error('Pick error:', err);
+            Alert.alert('Error', 'Failed to pick document');
+        }
+    };
+
+    const downloadTemplate = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            const fileUri = `${FileSystem.documentDirectory}schedule_template.csv`;
+            
+            const downloadRes = await FileSystem.downloadAsync(
+                `${API_BASE_URL}/api/admin/schedule-template`,
+                fileUri,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (downloadRes.status === 200) {
+                await Sharing.shareAsync(downloadRes.uri);
+            } else {
+                Alert.alert('Error', 'Failed to download template');
+            }
+        } catch (err) {
+            console.error('Download error:', err);
+            Alert.alert('Error', 'Could not download template');
+        }
+    };
+
+    const handleUpload = async () => {
+        if (!selectedFile) return;
+
+        try {
+            setIsUploading(true);
+            setUploadProgress(0);
+            const token = await SecureStore.getItemAsync('socketToken');
+
+            const formData = new FormData();
+            
+            // On some platforms, mimeType might be missing or generic
+            let mimeType = selectedFile.mimeType;
+            if (!mimeType || mimeType === 'application/octet-stream') {
+                if (selectedFile.name.endsWith('.csv')) mimeType = 'text/csv';
+                else if (selectedFile.name.endsWith('.xlsx')) mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                else if (selectedFile.name.endsWith('.xls')) mimeType = 'application/vnd.ms-excel';
+            }
+
+            formData.append('schedule', {
+                uri: selectedFile.uri,
+                name: selectedFile.name,
+                type: mimeType || 'application/octet-stream'
+            });
+
+            const response = await axios.post(`${API_BASE_URL}/api/admin/upload-schedule`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    Authorization: `Bearer ${token}`
+                },
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    setUploadProgress(percentCompleted);
+                }
+            });
+
+            Alert.alert('Success', `Schedule uploaded successfully! Processed ${response.data.count} assignments.`, [
+                { text: 'OK', onPress: () => {
+                    setSelectedFile(null);
+                    fetchRecentUploads();
+                }}
+            ]);
+
+            if (response.data.errors) {
+                console.warn('Upload warnings:', response.data.errors);
+            }
+
+        } catch (error) {
+            console.error('Upload error:', error.response?.data || error.message);
+            Alert.alert('Error', error.response?.data?.error || 'Failed to upload schedule. Please check file format.');
+        } finally {
+            setIsUploading(false);
+            setUploadProgress(0);
+        }
+    };
+
+    const formatSize = (bytes) => {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
     return (
@@ -36,7 +176,7 @@ const AdminUploadSchedule = ({ navigation }) => {
                     <Text style={styles.instructionText}>
                         Please upload the bus schedule in Excel or CSV format. Ensure all columns match the provided template.
                     </Text>
-                    <TouchableOpacity style={styles.templateButton}>
+                    <TouchableOpacity style={styles.templateButton} onPress={downloadTemplate}>
                         <MaterialCommunityIcons name="download" size={20} color={colors.primary} />
                         <Text style={styles.templateButtonText}>Download Template</Text>
                     </TouchableOpacity>
@@ -44,12 +184,12 @@ const AdminUploadSchedule = ({ navigation }) => {
 
                 {/* Upload Zone */}
                 {!selectedFile ? (
-                    <TouchableOpacity style={styles.uploadZone} onPress={() => setSelectedFile({ name: 'Spring_Semester_2024_Final.csv', size: '2.4 MB' })}>
+                    <TouchableOpacity style={styles.uploadZone} onPress={pickDocument}>
                         <View style={styles.uploadIconCircle}>
                             <MaterialCommunityIcons name="cloud-upload" size={40} color={colors.primary} />
                         </View>
                         <Text style={styles.uploadTitle}>Tap to upload</Text>
-                        <Text style={styles.uploadSubtitle}>or drag and drop your file here</Text>
+                        <Text style={styles.uploadSubtitle}>or select a CSV/XLSX file</Text>
                         <View style={styles.sizeBadge}>
                             <Text style={styles.sizeBadgeText}>Max size: 5MB</Text>
                         </View>
@@ -59,11 +199,15 @@ const AdminUploadSchedule = ({ navigation }) => {
                         <Text style={styles.sectionLabel}>READY TO UPLOAD</Text>
                         <View style={styles.fileRow}>
                             <View style={styles.fileIconContainer}>
-                                <MaterialCommunityIcons name="description" size={24} color="#10b981" />
+                                <MaterialCommunityIcons 
+                                    name={selectedFile.name.endsWith('.csv') ? 'file-delimited' : 'file-excel'} 
+                                    size={24} 
+                                    color="#10b981" 
+                                />
                             </View>
                             <View style={styles.fileMeta}>
                                 <Text style={styles.fileName} numberOfLines={1}>{selectedFile.name}</Text>
-                                <Text style={styles.fileSize}>{selectedFile.size}</Text>
+                                <Text style={styles.fileSize}>{formatSize(selectedFile.size)}</Text>
                             </View>
                             <TouchableOpacity onPress={() => setSelectedFile(null)}>
                                 <MaterialCommunityIcons name="delete" size={24} color="#ef4444" />
@@ -72,91 +216,88 @@ const AdminUploadSchedule = ({ navigation }) => {
                     </View>
                 )}
 
+                {/* Progress Bar during upload */}
+                {isUploading && (
+                    <View style={styles.uploadProgressContainer}>
+                        <View style={styles.progressHeader}>
+                            <Text style={styles.progressLabel}>Uploading...</Text>
+                            <Text style={styles.progressLabel}>{uploadProgress}%</Text>
+                        </View>
+                        <View style={styles.progressBarBg}>
+                            <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
+                        </View>
+                    </View>
+                )}
+
                 {/* Recent Activity */}
                 <View style={styles.activityHeader}>
-                    <Text style={styles.activityTitle}>Recent Activity</Text>
-                    <TouchableOpacity>
-                        <Text style={styles.viewAllText}>View All</Text>
+                    <Text style={styles.activityTitle}>Recently Processed</Text>
+                    <TouchableOpacity onPress={fetchRecentUploads}>
+                        <MaterialCommunityIcons name="refresh" size={20} color={colors.primary} />
                     </TouchableOpacity>
                 </View>
 
                 {/* Activity List */}
                 <View style={styles.activityList}>
-                    {/* Uploading Item */}
-                    <View style={styles.activityItem}>
-                        <View style={styles.activityMain}>
-                            <View style={[styles.activityIconBox, { backgroundColor: colors.primary + '20' }]}>
-                                <MaterialCommunityIcons name="upload-network" size={20} color={colors.primary} />
-                            </View>
-                            <View style={styles.activityMeta}>
-                                <Text style={styles.activityFileName} numberOfLines={1}>Fall_2024_Draft_v2.xlsx</Text>
-                                <Text style={styles.activityStatusLoading}>Uploading...</Text>
-                            </View>
-                        </View>
-                        <View style={styles.progressRow}>
-                            <View style={styles.progressBarBg}>
-                                <Animated.View style={[styles.progressBarFill, { width: '45%' }]} />
-                            </View>
-                            <Text style={styles.progressPercent}>45%</Text>
-                        </View>
-                    </View>
-
-                    {/* Completed Item */}
-                    <View style={styles.activityItem}>
-                        <View style={styles.activityMain}>
-                            <View style={styles.activityIconBox}>
-                                <MaterialCommunityIcons name="table-large" size={20} color="#6b7280" />
-                            </View>
-                            <View style={styles.activityMeta}>
-                                <Text style={styles.activityFileName} numberOfLines={1}>Fall_Semester_2023.csv</Text>
-                                <View style={styles.activityDetails}>
-                                    <Text style={styles.activityDate}>Oct 24, 2023</Text>
-                                    <View style={styles.dot} />
-                                    <View style={styles.statusRow}>
-                                        <MaterialCommunityIcons name="check-circle" size={12} color="#10b981" />
-                                        <Text style={styles.statusTextActive}>Active</Text>
+                    {isLoadingRecent ? (
+                        <ActivityIndicator color={colors.primary} />
+                    ) : recentUploads.length === 0 ? (
+                        <Text style={styles.emptyText}>No recent uploads found.</Text>
+                    ) : (
+                        recentUploads.map((item, index) => (
+                            <View key={item._id || index} style={styles.activityItem}>
+                                <View style={styles.activityMain}>
+                                    <View style={styles.activityIconBox}>
+                                        <MaterialCommunityIcons name="table-large" size={20} color="#6b7280" />
+                                    </View>
+                                    <View style={styles.activityMeta}>
+                                        <Text style={styles.activityFileName} numberOfLines={1}>
+                                            {item.fileName || 'Schedule Data'}
+                                        </Text>
+                                        <View style={styles.activityDetails}>
+                                            <Text style={styles.activityDate}>
+                                                {new Date(item.createdAt).toLocaleDateString()}
+                                            </Text>
+                                            <View style={styles.dot} />
+                                            <View style={styles.statusRow}>
+                                                <MaterialCommunityIcons 
+                                                    name={item.isActive ? "check-circle" : "archive-clock"} 
+                                                    size={12} 
+                                                    color={item.isActive ? "#10b981" : "#9ca3af"} 
+                                                />
+                                                <Text style={item.isActive ? styles.statusTextActive : styles.statusArchived}>
+                                                    {item.isActive ? 'Active' : 'Archived'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <Text style={styles.activityContext}>
+                                            Bus #{item.busId?.busNumber} • {item.routeId?.routeName}
+                                        </Text>
                                     </View>
                                 </View>
                             </View>
-                            <TouchableOpacity>
-                                <MaterialCommunityIcons name="dots-vertical" size={24} color="#9ca3af" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-
-                    {/* Archived Item */}
-                    <View style={[styles.activityItem, { opacity: 0.6 }]}>
-                        <View style={styles.activityMain}>
-                            <View style={styles.activityIconBox}>
-                                <MaterialCommunityIcons name="table-large" size={20} color="#6b7280" />
-                            </View>
-                            <View style={styles.activityMeta}>
-                                <Text style={styles.activityFileName} numberOfLines={1}>Summer_Schedule_2023.xlsx</Text>
-                                <View style={styles.activityDetails}>
-                                    <Text style={styles.activityDate}>May 15, 2023</Text>
-                                    <View style={styles.dot} />
-                                    <Text style={styles.statusArchived}>Archived</Text>
-                                </View>
-                            </View>
-                            <TouchableOpacity>
-                                <MaterialCommunityIcons name="dots-vertical" size={24} color="#9ca3af" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+                        ))
+                    )}
                 </View>
 
-                <View style={{ height: 100 }} />
+                <View style={{ height: 120 }} />
             </ScrollView>
 
             {/* Footer */}
             <View style={styles.footer}>
                 <TouchableOpacity 
-                    style={[styles.publishButton, !selectedFile && { opacity: 0.5 }]} 
+                    style={[styles.publishButton, (!selectedFile || isUploading) && { opacity: 0.5 }]} 
                     onPress={handleUpload}
-                    disabled={!selectedFile}
+                    disabled={!selectedFile || isUploading}
                 >
-                    <MaterialCommunityIcons name="publish" size={24} color="#1c190d" />
-                    <Text style={styles.publishButtonText}>Upload & Publish</Text>
+                    {isUploading ? (
+                        <ActivityIndicator color="#1c190d" />
+                    ) : (
+                        <>
+                            <MaterialCommunityIcons name="publish" size={24} color="#1c190d" />
+                            <Text style={styles.publishButtonText}>Upload & Publish</Text>
+                        </>
+                    )}
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -232,6 +373,7 @@ const styles = StyleSheet.create({
         height: 64,
         borderRadius: 32,
         backgroundColor: colors.primary + '15',
+        alignSelf: 'center',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -300,6 +442,29 @@ const styles = StyleSheet.create({
         color: '#6b6651',
         marginTop: 2,
     },
+    uploadProgressContainer: {
+        marginBottom: 32,
+        gap: 8,
+    },
+    progressHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    progressLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: colors.brandGrey,
+    },
+    progressBarBg: {
+        height: 8,
+        backgroundColor: '#e8e4ce',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
+        backgroundColor: colors.primary,
+    },
     activityHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -310,11 +475,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: colors.brandGrey,
-    },
-    viewAllText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: colors.primary,
     },
     activityList: {
         gap: 12,
@@ -347,44 +507,19 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: colors.brandGrey,
     },
-    activityStatusLoading: {
-        fontSize: 12,
-        color: colors.primary,
-        fontWeight: '600',
-        marginTop: 2,
-    },
-    progressRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        marginTop: 12,
-        paddingLeft: 52,
-    },
-    progressBarBg: {
-        flex: 1,
-        height: 6,
-        backgroundColor: '#f8f8f5',
-        borderRadius: 3,
-        overflow: 'hidden',
-    },
-    progressBarFill: {
-        height: '100%',
-        backgroundColor: colors.primary,
-        borderRadius: 3,
-    },
-    progressPercent: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#6b6651',
-    },
     activityDetails: {
         flexDirection: 'row',
         alignItems: 'center',
         marginTop: 2,
     },
     activityDate: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#6b6651',
+    },
+    activityContext: {
+        fontSize: 10,
+        color: '#9ca3af',
+        marginTop: 4,
     },
     dot: {
         width: 4,
@@ -399,12 +534,12 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     statusTextActive: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '600',
         color: '#059669',
     },
     statusArchived: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '600',
         color: '#6b7280',
     },
@@ -435,6 +570,12 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: '#1c190d',
+    },
+    emptyText: {
+        fontSize: 14,
+        color: '#9ca3af',
+        textAlign: 'center',
+        marginTop: 10,
     },
 });
 

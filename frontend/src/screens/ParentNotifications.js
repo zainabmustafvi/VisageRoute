@@ -30,19 +30,6 @@ const ParentNotifications = ({ navigation }) => {
         </View>
     );
 
-    const ActivityItem = ({ icon, title, subtitle, time, color }) => (
-        <View style={styles.activityItem}>
-            <MaterialIcons name={icon} size={18} color={color} />
-            <View style={{flex: 1}}>
-                <View style={styles.activityHeader}>
-                    <Text style={styles.activityTitle}>{title}</Text>
-                    <Text style={styles.activityTime}>{time}</Text>
-                </View>
-                <Text style={styles.activitySubtitle}>{subtitle}</Text>
-            </View>
-        </View>
-    );
-
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
@@ -56,9 +43,6 @@ const ParentNotifications = ({ navigation }) => {
                         <Text style={styles.headerSub}>PREFERENCES</Text>
                     </View>
                 </View>
-                <TouchableOpacity style={styles.settingsBtn}>
-                    <MaterialIcons name="settings" size={24} color="#9ca3af" />
-                </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -95,36 +79,6 @@ const ParentNotifications = ({ navigation }) => {
                     </View>
                 </View>
 
-                {/* Recent Activity */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>RECENT ACTIVITY</Text>
-                    <View style={styles.card}>
-                        <ActivityItem 
-                            icon="directions-bus" 
-                            title="Bus #42 is arriving" 
-                            subtitle="Approaching your location" 
-                            time="2m ago" 
-                            color="#f59e0b"
-                        />
-                        <View style={styles.divider} />
-                        <ActivityItem 
-                            icon="check-circle" 
-                            title="Amna safely on board" 
-                            subtitle="Checked in at 7:15 AM" 
-                            time="6h ago" 
-                            color="#22c55e"
-                        />
-                        <View style={styles.divider} />
-                        <ActivityItem 
-                            icon="schedule" 
-                            title="Morning Route Started" 
-                            subtitle="Bus #42 left the station" 
-                            time="7h ago" 
-                            color="#3b82f6"
-                        />
-                    </View>
-                </View>
-
                 <View style={styles.footerNote}>
                     <Text style={styles.footerNoteText}>
                         Push notifications are sent to your current device. To receive alerts via SMS or Email, please visit your{' '}
@@ -133,7 +87,7 @@ const ParentNotifications = ({ navigation }) => {
                 </View>
             </ScrollView>
 
-            {/* Bottom Nav Placeholder */}
+            {/* Bottom Nav */}
             <View style={styles.bottomNav}>
                  <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentHome')}>
                     <MaterialIcons name="home" size={28} color="#9ca3af" />
@@ -147,7 +101,7 @@ const ParentNotifications = ({ navigation }) => {
                     <MaterialIcons name="event-note" size={28} color="#9ca3af" />
                     <Text style={styles.navText}>Schedule</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem}>
+                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentAnnouncements')}>
                     <MaterialIcons name="feedback" size={28} color={Theme.colors.primary} />
                     <Text style={[styles.navText, { color: Theme.colors.primary }]}>Alerts</Text>
                 </TouchableOpacity>
@@ -193,9 +147,6 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#9ca3af',
         letterSpacing: 1.5,
-    },
-    settingsBtn: {
-        padding: 5,
     },
     scrollContent: {
         padding: 24,
@@ -252,30 +203,6 @@ const styles = StyleSheet.create({
         height: 1,
         backgroundColor: '#f9fafb',
         marginHorizontal: 16,
-    },
-    activityItem: {
-        flexDirection: 'row',
-        padding: 16,
-        gap: 12,
-    },
-    activityHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-    },
-    activityTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Theme.colors.brandGrey,
-    },
-    activityTime: {
-        fontSize: 10,
-        color: '#9ca3af',
-    },
-    activitySubtitle: {
-        fontSize: 12,
-        color: '#6b7280',
-        marginTop: 2,
     },
     footerNote: {
         paddingHorizontal: 8,

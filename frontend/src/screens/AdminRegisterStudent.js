@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    SafeAreaView, TextInput, StatusBar, Image, ActivityIndicator, Alert
+    TextInput, StatusBar, Image, ActivityIndicator, Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -10,6 +11,7 @@ import { colors, typography, spacing } from '../theme/Theme';
 import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
+import * as SecureStore from 'expo-secure-store';
 
 const AdminRegisterStudent = ({ navigation, route }) => {
     const studentData = route.params?.student;
@@ -17,6 +19,8 @@ const AdminRegisterStudent = ({ navigation, route }) => {
 
     const [sendLogin, setSendLogin] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
+    const [buses, setBuses] = useState([]);
+    const [isLoadingBuses, setIsLoadingBuses] = useState(false);
 
     // Photo state
     const [photoUri, setPhotoUri] = useState(null);
@@ -31,7 +35,30 @@ const AdminRegisterStudent = ({ navigation, route }) => {
     const [parentName, setParentName] = useState(studentData?.parentName || '');
     const [parentEmail, setParentEmail] = useState(studentData?.parentEmail || '');
     const [department, setDepartment] = useState(studentData?.department || '');
-    const [routeId, setRouteId] = useState(studentData?.busId || '');
+    const [busId, setBusId] = useState(studentData?.busId?._id || studentData?.busId || '');
+    const [rollNo, setRollNo] = useState(studentData?.rollNo || '');
+    const [year, setYear] = useState(studentData?.year || '');
+    const [semester, setSemester] = useState(studentData?.semester || '');
+    const [pickupPoint, setPickupPoint] = useState(studentData?.pickupPoint || '');
+
+    useEffect(() => {
+        fetchBuses();
+    }, []);
+
+    const fetchBuses = async () => {
+        try {
+            setIsLoadingBuses(true);
+            const token = await SecureStore.getItemAsync('socketToken');
+            const res = await axios.get(`${API_BASE_URL}/api/admin/buses`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setBuses(res.data);
+        } catch (error) {
+            console.error('Error fetching buses:', error);
+        } finally {
+            setIsLoadingBuses(false);
+        }
+    };
 
     const handleFieldChange = (field, value, setter) => {
         setter(value);
@@ -90,6 +117,7 @@ const AdminRegisterStudent = ({ navigation, route }) => {
 
         setIsLoading(true);
         try {
+            const token = await SecureStore.getItemAsync('socketToken');
             const url = isEditMode 
                 ? `${API_BASE_URL}/api/admin/students/${studentData._id}`
                 : `${API_BASE_URL}/api/admin/students`;
@@ -102,33 +130,30 @@ const AdminRegisterStudent = ({ navigation, route }) => {
                 parentName,
                 parentEmail,
                 department,
-                routeId,
+                routeId: busId, // Use the selected bus ID
+                rollNo,
+                year,
+                semester,
+                pickupPoint,
                 imageBase64: photoBase64,
             };
 
-            await axios({
-                method: isEditMode ? 'put' : 'post',
-                url: url,
-                data: payload,
-                timeout: 30000
-            });
-
-            Alert.alert(
-                '✅ Success',
-                `Student ${isEditMode ? 'updated' : 'registered'} successfully.`,
-                [{ text: 'OK', onPress: () => navigation.goBack() }]
-            );
+            if (isEditMode) {
+                await axios.put(url, payload, { headers: { Authorization: `Bearer ${token}` } });
+                Alert.alert('Success', 'Student updated successfully!');
+            } else {
+                await axios.post(url, payload, { headers: { Authorization: `Bearer ${token}` } });
+                Alert.alert('Success', 'Student registered successfully!');
+            }
+            navigation.goBack();
         } catch (error) {
-            console.log('API Error:', error.response?.data || error.message);
-            const message = error.response?.data?.error || 'Operation failed. Please try again.';
-            Alert.alert('Error', message);
+            console.error('Registration error:', error.response?.data || error.message);
+            Alert.alert('Registration Failed', error.response?.data?.error || 'An unexpected error occurred.');
         } finally {
             setIsLoading(false);
         }
     };
 
-
-    // ─── Render ───────────────────────────────────────────────────────
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
@@ -136,73 +161,52 @@ const AdminRegisterStudent = ({ navigation, route }) => {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <MaterialCommunityIcons name="chevron-left" size={28} color={colors.brandGrey} />
+                    <MaterialCommunityIcons name="chevron-left" size={32} color={colors.brandGrey} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{isEditMode ? 'Update Student' : 'Register Student'}</Text>
-                <View style={{ width: 40 }} />
+                <Text style={styles.headerTitle}>{isEditMode ? 'Edit Student' : 'Register Student'}</Text>
+                <View style={{ width: 32 }} />
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-
-                {/* ── Student Photo Picker ── */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Student Photo</Text>
-                    <Text style={styles.sectionSubtitle}>
-                        {isEditMode ? 'Update student photo (optional).' : 'Upload a clear, front-facing photo. This will be used for the attendance system.'}
-                    </Text>
-
+                {/* ── Photo Upload ── */}
+                <View style={styles.photoSection}>
                     <TouchableOpacity 
-                        style={[styles.photoPickerBox, errors.photo && styles.inputError]} 
+                        style={[styles.photoFrame, errors.photo && styles.errorBorder]} 
                         onPress={handlePickPhoto}
                     >
                         {photoUri ? (
-                            <View style={styles.photoPreviewContainer}>
-                                <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-                                <View style={styles.changePhotoBadge}>
-                                    <MaterialCommunityIcons name="camera" size={16} color="#fff" />
-                                    <Text style={styles.changePhotoText}>Change Photo</Text>
-                                </View>
-                            </View>
+                            <Image source={{ uri: photoUri }} style={styles.photo} />
                         ) : (
-                            <View style={styles.uploadPlaceholder}>
-                                <View style={styles.uploadIconCircle}>
-                                    <MaterialCommunityIcons name="camera-plus-outline" size={32} color={colors.primary} />
-                                </View>
-                                <Text style={styles.uploadTitle}>Tap to select from gallery</Text>
-                                <Text style={styles.uploadSubtitle}>JPG, PNG • Clear front-facing face photo</Text>
+                            <View style={styles.photoPlaceholder}>
+                                <MaterialCommunityIcons name="camera-plus" size={40} color="#9ca3af" />
+                                <Text style={styles.photoPlaceholderText}>Add Photo</Text>
                             </View>
                         )}
                     </TouchableOpacity>
-
-                    {/* Face encoding status indicator */}
-                    {photoUri && (
-                        <View style={styles.faceStatusRow}>
-                            <MaterialCommunityIcons name="face-recognition" size={18} color="#10b981" />
-                            <Text style={styles.faceStatusText}>
-                                Photo selected — face will be encoded upon registration
-                            </Text>
-                        </View>
-                    )}
+                    <Text style={styles.photoTip}>Take a clear face photo for AI attendance</Text>
                 </View>
 
-                {/* ── Basic Information ── */}
+                {/* ── Personal Details ── */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Basic Information</Text>
+                    <Text style={styles.sectionTitle}>Personal Details</Text>
                     <View style={styles.form}>
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Full Name</Text>
-                            <TextInput
-                                style={[styles.input, errors.fullName && styles.inputError]}
-                                placeholder="Enter student's full name"
-                                placeholderTextColor="#9ca3af"
-                                value={fullName}
-                                onChangeText={(v) => handleFieldChange('fullName', v, setFullName)}
-                            />
+                            <View style={[styles.inputWrapper, errors.fullName && styles.errorBorder]}>
+                                <MaterialCommunityIcons name="account-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.inputInner}
+                                    placeholder="Enter full name"
+                                    placeholderTextColor="#9ca3af"
+                                    value={fullName}
+                                    onChangeText={(v) => handleFieldChange('fullName', v, setFullName)}
+                                />
+                            </View>
                         </View>
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Email Address</Text>
-                            <View style={styles.inputWrapper}>
+                            <View style={[styles.inputWrapper, errors.email && styles.errorBorder]}>
                                 <MaterialCommunityIcons name="email-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.inputInner}
@@ -218,7 +222,7 @@ const AdminRegisterStudent = ({ navigation, route }) => {
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Phone Number</Text>
-                            <View style={styles.inputWrapper}>
+                            <View style={[styles.inputWrapper, errors.phone && styles.errorBorder]}>
                                 <MaterialCommunityIcons name="phone-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.inputInner}
@@ -233,7 +237,7 @@ const AdminRegisterStudent = ({ navigation, route }) => {
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Home Address</Text>
-                            <View style={styles.inputWrapper}>
+                            <View style={[styles.inputWrapper, errors.address && styles.errorBorder]}>
                                 <MaterialCommunityIcons name="map-marker-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.inputInner}
@@ -253,7 +257,7 @@ const AdminRegisterStudent = ({ navigation, route }) => {
                     <View style={styles.form}>
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Parent Full Name</Text>
-                            <View style={styles.inputWrapper}>
+                            <View style={[styles.inputWrapper, errors.parentName && styles.errorBorder]}>
                                 <MaterialCommunityIcons name="account-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.inputInner}
@@ -267,7 +271,7 @@ const AdminRegisterStudent = ({ navigation, route }) => {
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Parent Email Address</Text>
-                            <View style={styles.inputWrapper}>
+                            <View style={[styles.inputWrapper, errors.parentEmail && styles.errorBorder]}>
                                 <MaterialCommunityIcons name="email-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.inputInner}
@@ -281,22 +285,24 @@ const AdminRegisterStudent = ({ navigation, route }) => {
                             </View>
                         </View>
 
-                        <View style={styles.infoBox}>
-                            <TouchableOpacity
-                                style={styles.checkboxContainer}
-                                onPress={() => setSendLogin(!sendLogin)}
-                            >
-                                <MaterialCommunityIcons
-                                    name={sendLogin ? "checkbox-marked" : "checkbox-blank-outline"}
-                                    size={24}
-                                    color={colors.primary}
-                                />
-                            </TouchableOpacity>
-                            <View style={styles.infoTextContainer}>
-                                <Text style={styles.infoTitle}>Send Login ID & Password</Text>
-                                <Text style={styles.infoSubtitle}>Credentials will be sent to the parent's email upon registration.</Text>
+                        {!isEditMode && (
+                            <View style={styles.infoBox}>
+                                <TouchableOpacity
+                                    style={styles.checkboxContainer}
+                                    onPress={() => setSendLogin(!sendLogin)}
+                                >
+                                    <MaterialCommunityIcons
+                                        name={sendLogin ? "checkbox-marked" : "checkbox-blank-outline"}
+                                        size={24}
+                                        color={colors.primary}
+                                    />
+                                </TouchableOpacity>
+                                <View style={styles.infoTextContainer}>
+                                    <Text style={styles.infoTitle}>Send Login ID & Password</Text>
+                                    <Text style={styles.infoSubtitle}>Credentials will be sent to the parent's email upon registration.</Text>
+                                </View>
                             </View>
-                        </View>
+                        )}
                     </View>
                 </View>
 
@@ -304,6 +310,20 @@ const AdminRegisterStudent = ({ navigation, route }) => {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Academic & Transport</Text>
                     <View style={styles.form}>
+                         <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Roll Number</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="card-account-details-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.inputInner}
+                                    placeholder="e.g. 21-CS-123"
+                                    placeholderTextColor="#9ca3af"
+                                    value={rollNo}
+                                    onChangeText={setRollNo}
+                                />
+                            </View>
+                        </View>
+
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Department</Text>
                             <View style={styles.inputWrapper}>
@@ -322,19 +342,38 @@ const AdminRegisterStudent = ({ navigation, route }) => {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Assigned Bus Route</Text>
+                            <Text style={styles.label}>Assigned Bus</Text>
                             <View style={styles.inputWrapper}>
                                 <MaterialCommunityIcons name="bus" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <Picker
-                                    selectedValue={routeId}
-                                    onValueChange={(v) => handleFieldChange('routeId', v, setRouteId)}
+                                    selectedValue={busId}
+                                    onValueChange={(v) => handleFieldChange('busId', v, setBusId)}
                                     style={styles.picker}
+                                    enabled={!isLoadingBuses}
                                 >
-                                    <Picker.Item label="Select Route" value="" />
-                                    <Picker.Item label="Route A - North Campus" value="65f1234567890abcdef12345" />
-                                    <Picker.Item label="Route B - Downtown" value="65f1234567890abcdef12346" />
-                                    <Picker.Item label="Route C - West Side" value="65f1234567890abcdef12347" />
+                                    <Picker.Item label={isLoadingBuses ? "Loading Buses..." : "Select Bus"} value="" />
+                                    {buses.map(b => (
+                                        <Picker.Item 
+                                            key={b._id} 
+                                            label={`Bus #${b.busNumber} (${b.plateNumber})`} 
+                                            value={b._id} 
+                                        />
+                                    ))}
                                 </Picker>
+                            </View>
+                        </View>
+                        
+                         <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Pickup Point</Text>
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="map-marker-radius-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.inputInner}
+                                    placeholder="Enter pickup location"
+                                    placeholderTextColor="#9ca3af"
+                                    value={pickupPoint}
+                                    onChangeText={setPickupPoint}
+                                />
                             </View>
                         </View>
                     </View>
@@ -378,13 +417,51 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#f3f4f6',
     },
-    backButton: { marginLeft: -10 },
     headerTitle: {
-        fontSize: typography.sizes.lg,
+        fontSize: 18,
         fontWeight: 'bold',
         color: colors.brandGrey,
     },
     content: { flex: 1 },
+    photoSection: {
+        alignItems: 'center',
+        paddingVertical: 30,
+        backgroundColor: '#f9fafb',
+    },
+    photoFrame: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: '#fff',
+        borderWidth: 2,
+        borderColor: '#e5e7eb',
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 5,
+    },
+    photo: {
+        width: '100%',
+        height: '100%',
+    },
+    photoPlaceholder: {
+        alignItems: 'center',
+    },
+    photoPlaceholderText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#9ca3af',
+        marginTop: 5,
+    },
+    photoTip: {
+        fontSize: 12,
+        color: '#6b7280',
+        marginTop: 15,
+    },
     section: { paddingTop: 20 },
     sectionTitle: {
         fontSize: 18,
@@ -393,24 +470,18 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.lg,
         marginBottom: 6,
     },
-    sectionSubtitle: {
-        fontSize: 13,
-        color: '#6b7280',
+    form: {
         paddingHorizontal: spacing.lg,
-        marginBottom: 14,
+        paddingVertical: 10,
     },
-    form: { paddingHorizontal: spacing.lg, gap: 16 },
-    inputGroup: { gap: 6 },
-    label: { fontSize: 14, fontWeight: '500', color: '#374151' },
-    input: {
-        backgroundColor: '#f9fafb',
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        height: 48,
+    inputGroup: {
+        marginBottom: 15,
+    },
+    label: {
         fontSize: 14,
-        color: colors.brandGrey,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 8,
     },
     inputWrapper: {
         flexDirection: 'row',
@@ -418,140 +489,92 @@ const styles = StyleSheet.create({
         backgroundColor: '#f9fafb',
         borderWidth: 1,
         borderColor: '#e5e7eb',
-        borderRadius: 8,
+        borderRadius: 12,
         paddingHorizontal: 12,
-        height: 48,
+        height: 50,
+    },
+    inputIcon: {
+        marginRight: 10,
     },
     inputInner: {
         flex: 1,
-        fontSize: 14,
+        fontSize: 15,
         color: colors.brandGrey,
-        marginLeft: 8,
     },
-    inputIcon: { marginRight: 2 },
-    picker: { flex: 1, height: 48 },
+    picker: {
+        flex: 1,
+        marginLeft: -10,
+    },
+    errorBorder: {
+        borderColor: '#ef4444',
+    },
     infoBox: {
         flexDirection: 'row',
-        backgroundColor: '#fefce8',
-        borderWidth: 1,
-        borderColor: '#fef08a',
+        backgroundColor: '#f0f9ff',
+        padding: 15,
         borderRadius: 12,
-        padding: 12,
-        marginTop: 4,
-    },
-    checkboxContainer: { marginRight: 10, marginTop: 2 },
-    infoTextContainer: { flex: 1 },
-    infoTitle: { fontSize: 14, fontWeight: 'bold', color: colors.brandGrey },
-    infoSubtitle: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-
-    // ── Photo Picker ─────────────────────────────────
-    photoPickerBox: {
-        marginHorizontal: spacing.lg,
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: '#e5e7eb',
-        backgroundColor: '#f9fafb',
-        borderRadius: 16,
-        overflow: 'hidden',
-    },
-    uploadPlaceholder: {
-        padding: 32,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    uploadIconCircle: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        backgroundColor: '#fff',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
-        elevation: 2,
-    },
-    uploadTitle: {
-        fontSize: 15,
-        fontWeight: 'bold',
-        color: colors.brandGrey,
-        marginBottom: 4,
-    },
-    uploadSubtitle: { fontSize: 12, color: '#9ca3af' },
-
-    photoPreviewContainer: { alignItems: 'center', padding: 20 },
-    photoPreview: {
-        width: 130,
-        height: 130,
-        borderRadius: 65,
-        borderWidth: 3,
-        borderColor: colors.primary,
-    },
-    changePhotoBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: colors.brandGrey,
-        paddingHorizontal: 14,
-        paddingVertical: 6,
-        borderRadius: 20,
-        marginTop: 12,
-    },
-    changePhotoText: { fontSize: 12, fontWeight: 'bold', color: '#fff' },
-
-    faceStatusRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        paddingHorizontal: spacing.lg,
+        borderWidth: 1,
+        borderColor: '#bae6fd',
         marginTop: 10,
     },
-    faceStatusText: { fontSize: 12, color: '#10b981', fontWeight: '500' },
-
-    // ── Footer ─────────────────────────────────────
+    checkboxContainer: {
+        marginRight: 12,
+    },
+    infoTextContainer: {
+        flex: 1,
+    },
+    infoTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#0369a1',
+    },
+    infoSubtitle: {
+        fontSize: 12,
+        color: '#0ea5e9',
+        marginTop: 2,
+    },
     footer: {
         position: 'absolute',
         bottom: 0,
         width: '100%',
-        flexDirection: 'row',
-        padding: spacing.lg,
-        paddingBottom: 32,
         backgroundColor: '#fff',
+        padding: spacing.lg,
+        flexDirection: 'row',
+        gap: 12,
         borderTopWidth: 1,
         borderTopColor: '#f3f4f6',
-        gap: 12,
     },
     primaryButton: {
-        flex: 1,
-        height: 50,
+        flex: 2,
         backgroundColor: colors.primary,
-        borderRadius: 10,
+        height: 56,
+        borderRadius: 16,
         flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'center',
+        alignItems: 'center',
         gap: 8,
     },
-    primaryButtonDisabled: { opacity: 0.6 },
-    primaryButtonText: { fontSize: 16, fontWeight: 'bold', color: '#000' },
+    primaryButtonDisabled: {
+        opacity: 0.7,
+    },
+    primaryButtonText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#000',
+    },
     secondaryButton: {
         flex: 1,
-        height: 50,
-        backgroundColor: '#fff',
-        borderRadius: 10,
+        height: 56,
+        borderRadius: 16,
         borderWidth: 1,
         borderColor: '#e5e7eb',
-        alignItems: 'center',
         justifyContent: 'center',
+        alignItems: 'center',
     },
-    secondaryButtonText: { fontSize: 16, fontWeight: '600', color: colors.brandGrey },
-    inputError: {
-        borderColor: '#ef4444',
-        backgroundColor: '#fef2f2',
-    },
-    photoError: {
-        borderColor: '#ef4444',
+    secondaryButtonText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#6b7280',
     },
 });
 
