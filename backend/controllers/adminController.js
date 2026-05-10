@@ -2,11 +2,18 @@ const Student = require('../models/Student');
 const Driver = require('../models/Driver');
 const Bus = require('../models/Bus');
 const BusRoute = require('../models/BusRoute');
+const BusRouteAssignment = require('../models/BusRouteAssignment');
+const fs = require('fs');
+const csv = require('csv-parser');
+const xlsx = require('xlsx');
+const path = require('path');
 const User = require('../models/User');
+const Announcement = require('../models/Announcement');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { sendRegistrationEmail } = require('../utils/emailService');
+const { sendRegistrationEmail, sendAnnouncementEmail } = require('../utils/emailService');
 const { extractFaceEmbedding } = require('../utils/faceService');
+const { getIo } = require('../config/socket');
 
 // Helper to generate a random password
 const generatePassword = (length = 10) => {
@@ -633,7 +640,255 @@ const updateRouteSchedule = async (req, res) => {
     }
 };
 
+// --- SCHEDULE UPLOAD CONTROLLERS ---
+
+// @desc    Upload bus schedule via CSV/XLSX
+// @route   POST /api/admin/upload-schedule
+// @access  Private/Admin
+const uploadSchedule = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Please upload a file' });
+        }
+
+        const filePath = req.file.path;
+        const fileExt = path.extname(req.file.originalname).toLowerCase();
+        let results = [];
+
+        if (fileExt === '.csv') {
+            results = await parseCSV(filePath);
+        } else if (fileExt === '.xlsx') {
+            results = parseXLSX(filePath);
+        } else {
+            fs.unlinkSync(filePath);
+            return res.status(400).json({ error: 'Please upload a valid CSV/XLSX file' });
+        }
+
+        const processedResults = [];
+        const errors = [];
+
+        for (const row of results) {
+            try {
+                // Map columns: Bus Number, Trip Name, Route, Pickup Time, Drop Time, Days of Week
+                const busNum = row['Bus Number'];
+                const tripName = row['Trip Name'];
+                const routeName = row['Route'];
+                const pickupTime = row['Pickup Time'];
+                const dropTime = row['Drop Time'];
+                const daysStr = row['Days of Week'] || '1,2,3,4,5';
+
+                if (!busNum || !routeName) {
+                    errors.push(`Row missing bus or route info: ${JSON.stringify(row)}`);
+                    continue;
+                }
+
+                const bus = await Bus.findOne({ busNumber: busNum });
+                let route = await BusRoute.findOne({ routeName });
+
+                if (!bus) {
+                    errors.push(`Bus #${busNum} not found`);
+                    continue;
+                }
+
+                if (!route) {
+                    route = new BusRoute({ routeName });
+                    await route.save();
+                }
+
+                const daysOfWeek = daysStr.split(',').map(d => parseInt(d.trim()));
+
+                const assignment = await BusRouteAssignment.findOneAndUpdate(
+                    { busId: bus._id, routeId: route._id, tripName },
+                    {
+                        scheduleTime: `${pickupTime} - ${dropTime}`,
+                        pickupTime,
+                        dropTime,
+                        daysOfWeek,
+                        isActive: true,
+                        fileName: req.file.originalname
+                    },
+                    { upsert: true, new: true }
+                );
+
+                processedResults.push(assignment);
+            } catch (innerErr) {
+                errors.push(`Error processing row: ${innerErr.message}`);
+            }
+        }
+
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+        res.json({
+            message: 'Schedule processed successfully',
+            count: processedResults.length,
+            errors: errors.length > 0 ? errors : undefined
+        });
+    } catch (err) {
+        console.error('Upload Error:', err);
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        res.status(500).json({ error: 'Server Error during schedule upload' });
+    }
+};
+
+// @desc    Get CSV Template for schedule
+// @route   GET /api/admin/schedule-template
+// @access  Private/Admin
+const getScheduleTemplate = (req, res) => {
+    const csvContent = "Bus Number,Trip Name,Route,Pickup Time,Drop Time,Days of Week\n101,Morning Trip,Route A,07:30 AM,08:30 AM,\"1,2,3,4,5\"\n102,Evening Trip,Route B,03:30 PM,04:30 PM,\"1,2,3,4,5\"";
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=schedule_template.csv');
+    res.status(200).send(csvContent);
+};
+
+// @desc    Get recently uploaded schedules
+// @route   GET /api/admin/recent-uploads
+// @access  Private/Admin
+const getRecentUploads = async (req, res) => {
+    try {
+        const uploads = await BusRouteAssignment.find()
+            .populate('busId', 'busNumber plateNumber')
+            .populate('routeId', 'routeName')
+            .sort({ createdAt: -1 })
+            .limit(10);
+        
+        res.json(uploads);
+    } catch (err) {
+        res.status(500).json({ error: 'Server Error' });
+    }
+};
+
+// Helper: Parse CSV
+const parseCSV = (filePath) => {
+    return new Promise((resolve, reject) => {
+        const results = [];
+        fs.createReadStream(filePath)
+            .pipe(csv())
+            .on('data', (data) => results.push(data))
+            .on('end', () => resolve(results))
+            .on('error', (err) => reject(err));
+    });
+};
+
+// Helper: Parse XLSX
+const parseXLSX = (filePath) => {
+    const workbook = xlsx.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    return xlsx.utils.sheet_to_json(worksheet);
+};
+
+// @desc    Create and send an announcement
+// @route   POST /api/admin/announcements
+// @access  Private/Admin
+const createAnnouncement = async (req, res) => {
+    try {
+        const { title, content, recipients, deliveryOptions, priority } = req.body;
+        console.log('--- Announcement Send Request ---');
+        console.log('Admin ID from req.user:', req.user?.id || req.user?._id);
+        console.log('Payload:', JSON.stringify(req.body, null, 2));
+
+        const announcement = await Announcement.create({
+            adminId: req.user.id || req.user._id,
+            title,
+            content,
+            recipients,
+            deliveryOptions,
+            priority,
+            isSent: true,
+            sentAt: Date.now()
+        });
+        console.log('Announcement saved to DB. ID:', announcement._id);
+
+        let query = { role: 'parent' };
+
+        if (recipients.type !== 'all' && recipients.targetId) {
+            const mongoose = require('mongoose');
+            if (!mongoose.Types.ObjectId.isValid(recipients.targetId)) {
+                return res.status(400).json({ error: 'Invalid target ID format' });
+            }
+        }
+
+        if (recipients.type === 'route') {
+            // 1. Find all buses assigned to this route
+            const BusRouteAssignment = require('../models/BusRouteAssignment');
+            const assignments = await BusRouteAssignment.find({ routeId: recipients.targetId }).select('busId');
+            const busIds = [...new Set(assignments.map(a => a.busId.toString()))];
+            
+            // 2. Find students assigned to any of these buses
+            const students = await Student.find({ busId: { $in: busIds } });
+            const parentIds = students.map(s => s.parentId).filter(id => id);
+            query._id = { $in: parentIds };
+        } else if (recipients.type === 'bus') {
+            // Find students on this bus
+            const students = await Student.find({ busId: recipients.targetId });
+            const parentIds = students.map(s => s.parentId).filter(id => id);
+            query._id = { $in: parentIds };
+        }
+
+        const targetUsers = await User.find(query).select('userId');
+        
+        let io;
+        try {
+            io = getIo();
+        } catch (sErr) {
+            console.error('Socket not initialized, skipping push notification');
+        }
+
+        // Send via Push (Socket.io)
+        if (deliveryOptions.push && io) {
+            targetUsers.forEach(user => {
+                io.to(user._id.toString()).emit('newAnnouncement', {
+                    id: announcement._id,
+                    title,
+                    content,
+                    priority,
+                    sentAt: announcement.sentAt
+                });
+            });
+        }
+
+        // Send via Email
+        if (deliveryOptions.email) {
+            targetUsers.forEach(user => {
+                // user.userId contains the parent's email
+                sendAnnouncementEmail(user.userId, title, content, priority);
+            });
+        }
+
+        res.status(201).json({ 
+            message: 'Announcement sent successfully', 
+            recipientCount: targetUsers.length 
+        });
+
+    } catch (err) {
+        console.error('Announcement Error:', err);
+        res.status(500).json({ error: 'Server Error sending announcement' });
+    }
+};
+
+// @desc    Get dashboard statistics
+// @route   GET /api/admin/stats
+// @access  Private/Admin
+const getAdminStats = async (req, res) => {
+    try {
+        const busCount = await Bus.countDocuments();
+        const studentCount = await Student.countDocuments();
+        const driverCount = await Driver.countDocuments({ isActive: true });
+        
+        // You could also calculate active trips here if needed
+        
+        res.json({
+            buses: busCount,
+            students: studentCount,
+            drivers: driverCount
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Server Error fetching stats' });
+    }
+};
+
 module.exports = {
+    getAdminStats,
     getStudents,
     getStudentById,
     createStudent,
@@ -652,4 +907,9 @@ module.exports = {
     getBusRoutes,
     createBusRoute,
     updateRouteSchedule,
+    uploadSchedule,
+    getScheduleTemplate,
+    getRecentUploads,
+    createAnnouncement,
+    getAdminStats
 };

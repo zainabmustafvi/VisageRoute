@@ -3,8 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Sta
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme/Theme';
 import { Picker } from '@react-native-picker/picker';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
+import * as SecureStore from 'expo-secure-store';
 
 const AdminStudentDetail = ({ navigation, route }) => {
     const { studentId: paramId } = route.params;
@@ -25,6 +28,7 @@ const AdminStudentDetail = ({ navigation, route }) => {
     const [parentName, setParentName] = useState('');
     const [parentEmail, setParentEmail] = useState('');
     const [image, setImage] = useState(null);
+    const [imageBase64, setImageBase64] = useState(null);
     const [buses, setBuses] = useState([]);
 
     useEffect(() => {
@@ -83,7 +87,8 @@ const AdminStudentDetail = ({ navigation, route }) => {
                 year,
                 semester,
                 pickupPoint: pickup,
-                routeId: selectedRoute
+                routeId: selectedRoute,
+                imageBase64: imageBase64
             };
 
             await axios.put(`${API_BASE_URL}/api/admin/students/${paramId}`, payload);
@@ -120,6 +125,28 @@ const AdminStudentDetail = ({ navigation, route }) => {
         );
     };
 
+    const handlePickPhoto = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission Required', 'Please allow access to your photo gallery.');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        });
+
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            setImage(asset.uri);
+            const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' });
+            setImageBase64(base64);
+        }
+    };
+
     if (isLoading) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -146,7 +173,7 @@ const AdminStudentDetail = ({ navigation, route }) => {
                 <View style={styles.profileCard}>
                     <View style={styles.imageContainer}>
                         <Image source={{ uri: image }} style={styles.profileImage} />
-                        <TouchableOpacity style={styles.editImageBadge}>
+                        <TouchableOpacity style={styles.editImageBadge} onPress={handlePickPhoto}>
                             <MaterialCommunityIcons name="camera" size={16} color="#fff" />
                         </TouchableOpacity>
                     </View>

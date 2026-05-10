@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
     View, Text, StyleSheet, ScrollView, TouchableOpacity, 
-    SafeAreaView, TextInput, StatusBar, ActivityIndicator, Alert 
+    TextInput, StatusBar, ActivityIndicator, Alert 
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme/Theme';
 import { Picker } from '@react-native-picker/picker';
@@ -72,7 +73,7 @@ const AdminRegisterDriver = ({ navigation }) => {
                 employeeId,
                 licenseNumber: licenseNo,
                 licenseClass,
-                licenseExpiry: expiration,
+                licenseExpiry: expiration.trim(),
                 assignedBusId: assignedBusId || null
             };
 
