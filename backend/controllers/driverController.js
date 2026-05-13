@@ -7,29 +7,29 @@ const Student = require('../models/Student');
 // @access  Private/Driver
 const getAssignedRoute = async (req, res) => {
     try {
-        // req.user has the decoded JWT payload
-        // We first need to find the Driver record that corresponds to this user account
-        // Assuming req.user._id maps to Driver.userId (or you fetch by matching something unique)
-        // For right now, let's fetch based on the assumption that Driver has a userId field
-
-        const driver = await Driver.findOne({ userId: req.user._id });
+        const driver = await Driver.findOne({ userId: req.user.userId });
 
         if (!driver) {
-            // For testing purposes, if seed didn't link userId, we fallback to just fetching all for now
-            // In a real prod environment, we strictly return 404 here.
-            return res.status(404).json({ error: 'Driver profile not found for this user.' });
+            return res.status(404).json({ error: 'Driver profile not found.' });
         }
 
-        if (!driver.routeId) {
-            return res.status(404).json({ error: 'No bus route assigned to this driver yet.' });
+        if (!driver.assignedBusId) {
+            return res.status(404).json({ error: 'No bus assigned to this driver.' });
+        }
+
+        // Find route via Bus Assignment
+        const BusRouteAssignment = require('../models/BusRouteAssignment');
+        const assignment = await BusRouteAssignment.findOne({ busId: driver.assignedBusId, isActive: true });
+
+        if (!assignment) {
+            return res.status(404).json({ error: 'No active route assignment for this bus.' });
         }
 
         // Fetch the Route Details
-        const route = await BusRoute.findById(driver.routeId);
+        const route = await BusRoute.findById(assignment.routeId);
 
-        // Fetch all Students assigned to this Route
-        const students = await Student.find({ routeId: driver.routeId })
-            .populate('parentId', 'userId'); // Optionally populate Parent details
+        // Fetch all Students assigned to this Bus
+        const students = await Student.find({ busId: driver.assignedBusId });
 
         res.json({
             route,
@@ -42,6 +42,56 @@ const getAssignedRoute = async (req, res) => {
     }
 };
 
+// @desc    Get dashboard summary (Name, Bus Number, Trip Status)
+// @route   GET /api/driver/dashboard
+// @access  Private/Driver
+const getDashboardData = async (req, res) => {
+    try {
+        const driver = await Driver.findOne({ userId: req.user.userId }).populate('assignedBusId');
+        
+        if (!driver) {
+            return res.status(404).json({ error: 'Driver not found' });
+        }
+
+        // Find routeId if available
+        const BusRouteAssignment = require('../models/BusRouteAssignment');
+        const assignment = await BusRouteAssignment.findOne({ busId: driver.assignedBusId?._id, isActive: true });
+
+        res.json({
+            name: driver.name,
+            busNumber: driver.assignedBusId ? driver.assignedBusId.busNumber : 'N/A',
+            isOnline: driver.isOnline,
+            assignedBusId: driver.assignedBusId ? driver.assignedBusId._id : null,
+            routeId: assignment ? assignment.routeId : null
+        });
+    } catch (err) {
+        console.error("Dashboard Data Error:", err);
+        res.status(500).json({ error: 'Server Error' });
+    }
+};
+
+// @desc    Update trip status (Online/Offline)
+// @route   PATCH /api/driver/trip-status
+// @access  Private/Driver
+const updateTripStatus = async (req, res) => {
+    try {
+        const { isOnline } = req.body;
+        const driver = await Driver.findOneAndUpdate(
+            { userId: req.user.userId },
+            { isOnline },
+            { new: true }
+        );
+
+        if (!driver) return res.status(404).json({ error: 'Driver not found' });
+
+        res.json({ message: `Status updated to ${isOnline ? 'Online' : 'Offline'}`, isOnline: driver.isOnline });
+    } catch (err) {
+        res.status(500).json({ error: 'Server Error updating status' });
+    }
+};
+
 module.exports = {
     getAssignedRoute,
+    getDashboardData,
+    updateTripStatus
 };

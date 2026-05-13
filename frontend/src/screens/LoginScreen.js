@@ -56,6 +56,14 @@ const LoginScreen = ({ navigation }) => {
             // 3. Store user data securely
             if (response.data.user) {
                 await SecureStore.setItemAsync('userRole', response.data.user.role);
+                
+                // Store driver-specific data if available
+                if (response.data.user.driverId) {
+                    await SecureStore.setItemAsync('driverId', response.data.user.driverId);
+                }
+                if (response.data.user.assignedBusId) {
+                    await SecureStore.setItemAsync('assignedBusId', response.data.user.assignedBusId);
+                }
 
                 // Also extract + store the JWT token for Socket.io auth
                 // The server sets it as an HTTP-only cookie named 'token'
