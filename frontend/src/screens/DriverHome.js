@@ -2,8 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet, Alert, Platform, SafeAreaView, ActivityIndicator, Dimensions, Animated, PanResponder
 } from 'react-native';
+import axios from 'axios';
+import MapView, { UrlTile, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
+import * as Battery from 'expo-battery';
+import NetInfo from '@react-native-community/netinfo';
 import { io } from 'socket.io-client';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Theme from '../theme/Theme';
@@ -16,21 +20,56 @@ const SWIPE_RANGE = SLIDER_WIDTH - BUTTON_SIZE - 8;
 import { API_BASE_URL } from '../config/api';
 
 const SOCKET_URL = API_BASE_URL;
-const DRIVER_ROUTE_ID = '000000000000000000000001';
+const DRIVER_ROUTE_ID_DEFAULT = '000000000000000000000001';
 
 const DriverHome = ({ navigation }) => {
     const [tripActive, setTripActive] = useState(false);
     const [currentLocation, setCurrentLocation] = useState(null);
     const [connecting, setConnecting] = useState(false);
+    const [driverData, setDriverData] = useState({ name: 'Loading...', busNumber: '...', isOnline: false });
+    const [loading, setLoading] = useState(true);
+    const [batteryLevel, setBatteryLevel] = useState(1);
+    const [isOnline, setIsOnline] = useState(true);
+    const [locationHistory, setLocationHistory] = useState([]);
+    const [updateInterval, setUpdateInterval] = useState(10000); // 10 seconds default
 
     const socketRef = useRef(null);
     const locationWatcherRef = useRef(null);
     const pan = useRef(new Animated.Value(0)).current;
+    const trackingIntervalRef = useRef(null);
 
     const handleLogout = async () => {
         if (tripActive) await stopTrip();
         await SecureStore.deleteItemAsync('userRole');
+        await SecureStore.deleteItemAsync('driverId');
+        await SecureStore.deleteItemAsync('assignedBusId');
         navigation.replace('Login');
+    };
+
+    const fetchDashboardData = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            const response = await axios.get(`${API_BASE_URL}/api/driver/dashboard`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setDriverData(response.data);
+            setTripActive(response.data.isOnline);
+            setLoading(false);
+        } catch (error) {
+            console.error('Error fetching dashboard:', error);
+            setLoading(false);
+        }
+    };
+
+    const updateTripStatusOnServer = async (isOnline) => {
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            await axios.patch(`${API_BASE_URL}/api/driver/trip-status`, { isOnline }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch (error) {
+            console.error('Error updating trip status:', error);
+        }
     };
 
     const connectSocket = async () => {
@@ -49,7 +88,7 @@ const DriverHome = ({ navigation }) => {
 
         socket.on('connect', () => {
             console.log('[Driver Socket] Connected:', socket.id);
-            socket.emit('joinRouteRoom', DRIVER_ROUTE_ID);
+            socket.emit('joinRouteRoom', driverData.routeId || DRIVER_ROUTE_ID_DEFAULT);
             setConnecting(false);
         });
 
@@ -70,41 +109,135 @@ const DriverHome = ({ navigation }) => {
         }
 
         await connectSocket();
+        await updateTripStatusOnServer(true);
         setTripActive(true);
 
-        locationWatcherRef.current = await Location.watchPositionAsync(
-            {
-                accuracy: Location.Accuracy.High,
-                timeInterval: 4000,
-                distanceInterval: 10,
-            },
-            (loc) => {
-                const { latitude, longitude } = loc.coords;
-                setCurrentLocation({ lat: latitude, lng: longitude });
-                if (socketRef.current?.connected) {
-                    socketRef.current.emit('updateLocation', {
-                        lat: latitude,
-                        lng: longitude,
-                        routeId: DRIVER_ROUTE_ID,
-                    });
+        // Toast: You started location sharing
+        Alert.alert("Status", "You started location sharing");
+
+        // Request Location
+        const locationService = await Location.getCurrentPositionAsync({});
+        setCurrentLocation({
+            lat: locationService.coords.latitude,
+            lng: locationService.coords.longitude
+        });
+
+        // Start GPS tracking every 10 seconds (or 30 if battery low)
+        startTracking();
+    };
+
+    const startTracking = () => {
+        if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
+
+        trackingIntervalRef.current = setInterval(async () => {
+            try {
+                const loc = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced
+                });
+
+                const { latitude, longitude, speed, accuracy } = loc.coords;
+                const timestamp = new Date().toISOString();
+
+                if (!driverData.assignedBusId) {
+                    console.warn("Skipping location update: assignedBusId is missing");
+                    return;
                 }
+
+                const locationData = {
+                    bus_id: driverData.assignedBusId,
+                    latitude,
+                    longitude,
+                    speed: speed || 0,
+                    accuracy: accuracy || 0,
+                    timestamp
+                };
+
+                setCurrentLocation({ lat: latitude, lng: longitude });
+
+                // Check connectivity
+                if (isOnline) {
+                    await sendLocationToBackend(locationData);
+                    // Also broadcast via socket
+                    if (socketRef.current?.connected) {
+                        socketRef.current.emit('updateLocation', {
+                            lat: latitude,
+                            lng: longitude,
+                            routeId: driverData.routeId || DRIVER_ROUTE_ID_DEFAULT,
+                        });
+                    }
+                } else {
+                    // Cache locally
+                    await cacheLocation(locationData);
+                }
+
+            } catch (error) {
+                console.error("Tracking Error:", error);
             }
-        );
+        }, updateInterval);
+    };
+
+    const sendLocationToBackend = async (data) => {
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            await axios.post(`${API_BASE_URL}/api/location/update`, data, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch (error) {
+            console.error("Backend Sync Error:", error);
+            // If it failed due to network, cache it
+            if (!error.response) await cacheLocation(data);
+        }
+    };
+
+    const cacheLocation = async (data) => {
+        try {
+            const cached = await SecureStore.getItemAsync('cached_locations');
+            const list = cached ? JSON.parse(cached) : [];
+            list.push(data);
+            await SecureStore.setItemAsync('cached_locations', JSON.stringify(list));
+        } catch (e) {
+            console.error("Caching Error:", e);
+        }
+    };
+
+    const syncCachedLocations = async () => {
+        try {
+            const cached = await SecureStore.getItemAsync('cached_locations');
+            if (!cached) return;
+
+            const list = JSON.parse(cached);
+            if (list.length === 0) return;
+
+            console.log(`Syncing ${list.length} cached locations...`);
+            for (const loc of list) {
+                await sendLocationToBackend(loc);
+            }
+
+            await SecureStore.deleteItemAsync('cached_locations');
+        } catch (e) {
+            console.error("Sync Error:", e);
+        }
     };
 
     const stopTrip = async () => {
+        if (trackingIntervalRef.current) {
+            clearInterval(trackingIntervalRef.current);
+            trackingIntervalRef.current = null;
+        }
         if (locationWatcherRef.current) {
             locationWatcherRef.current.remove();
             locationWatcherRef.current = null;
         }
         if (socketRef.current?.connected) {
-            socketRef.current.emit('endTrip', { routeId: DRIVER_ROUTE_ID });
+            socketRef.current.emit('endTrip', { routeId: driverData.routeId || DRIVER_ROUTE_ID_DEFAULT });
             socketRef.current.disconnect();
             socketRef.current = null;
         }
+        await updateTripStatusOnServer(false);
         setTripActive(false);
         setCurrentLocation(null);
         resetSlider();
+        Alert.alert("Status", "Location sharing stopped");
     };
 
     const resetSlider = () => {
@@ -138,11 +271,38 @@ const DriverHome = ({ navigation }) => {
     ).current;
 
     useEffect(() => {
+        fetchDashboardData();
+
+        // Battery tracking
+        const batteryListener = Battery.addBatteryLevelListener(({ batteryLevel }) => {
+            setBatteryLevel(batteryLevel);
+            if (batteryLevel < 0.2) {
+                setUpdateInterval(30000); // 30 seconds
+            } else {
+                setUpdateInterval(10000); // 10 seconds
+            }
+        });
+
+        // Connectivity tracking
+        const unsubscribe = NetInfo.addEventListener(state => {
+            setIsOnline(state.isConnected);
+            if (state.isConnected) {
+                syncCachedLocations();
+            }
+        });
+
         return () => {
+            if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
             if (locationWatcherRef.current) locationWatcherRef.current.remove();
             if (socketRef.current) socketRef.current.disconnect();
+            batteryListener.remove();
+            unsubscribe();
         };
     }, []);
+
+    useEffect(() => {
+        if (tripActive) startTracking();
+    }, [updateInterval]);
 
     const translateX = pan.interpolate({
         inputRange: [0, SWIPE_RANGE],
@@ -154,10 +314,10 @@ const DriverHome = ({ navigation }) => {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.driverNameTitle}>Sadaat Malik</Text>
+                    <Text style={styles.driverNameTitle}>{driverData.name}</Text>
                     <View style={styles.headerSubRow}>
                         <View style={styles.headerDot} />
-                        <Text style={styles.headerSub}>BUS DRIVER #104</Text>
+                        <Text style={styles.headerSub}>BUS DRIVER #{driverData.busNumber}</Text>
                     </View>
                 </View>
                 <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
@@ -166,29 +326,83 @@ const DriverHome = ({ navigation }) => {
             </View>
 
             <View style={styles.main}>
-                <View style={styles.statusDisplay}>
-                    <View style={styles.statusLabelRow}>
-                        <View style={[styles.pulseDot, tripActive && styles.pulseDotActive]} />
-                        <Text style={styles.statusLabel}>CURRENT STATUS</Text>
+                {tripActive ? (
+                    <View style={styles.mapContainer}>
+                        <MapView
+                            provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : null}
+                            mapType={Platform.OS === 'android' ? 'none' : 'standard'}
+                            style={styles.map}
+                            showsUserLocation={true}
+                            showsMyLocationButton={true}
+                            showsCompass={true}
+                            showsScale={true}
+                            region={currentLocation ? {
+                                latitude: currentLocation.lat,
+                                longitude: currentLocation.lng,
+                                latitudeDelta: 0.01,
+                                longitudeDelta: 0.01,
+                            } : {
+                                latitude: 24.8607,
+                                longitude: 67.0011,
+                                latitudeDelta: 0.05,
+                                longitudeDelta: 0.05,
+                            }}
+                        >
+                            <UrlTile
+                                urlTemplate="https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                maximumZ={19}
+                                flipY={false}
+                                shouldReplaceMapContent={true}
+                                tileSize={256}
+                                zIndex={100}
+                            />
+                            {currentLocation && (
+                                <Marker
+                                    coordinate={{
+                                        latitude: currentLocation.lat,
+                                        longitude: currentLocation.lng,
+                                    }}
+                                    title="Your Location"
+                                >
+                                    <View style={styles.markerContainer}>
+                                        <MaterialCommunityIcons name="bus-side" size={24} color="#fff" />
+                                    </View>
+                                </Marker>
+                            )}
+                        </MapView>
+                        
+                        <View style={styles.mapOverlay}>
+                             <View style={styles.statusBadge}>
+                                <View style={[styles.pulseDot, styles.pulseDotActive]} />
+                                <Text style={styles.statusText}>SHARING LIVE LOCATION</Text>
+                             </View>
+                        </View>
                     </View>
-                    <Text style={[styles.statusMain, tripActive && styles.statusMainActive]}>
-                        {tripActive ? 'ONLINE' : 'OFFLINE'}
-                    </Text>
-                    <Text style={styles.statusDesc}>
-                        {tripActive 
-                            ? 'You are broadcasting your live location to students.' 
-                            : 'You are hidden from students. Start your route to broadcast location.'}
-                    </Text>
-                </View>
+                ) : (
+                    <View style={styles.statusDisplay}>
+                        <View style={styles.statusLabelRow}>
+                            <View style={[styles.pulseDot, tripActive && styles.pulseDotActive]} />
+                            <Text style={styles.statusLabel}>CURRENT STATUS</Text>
+                        </View>
+                        <Text style={[styles.statusMain, tripActive && styles.statusMainActive]}>
+                            {tripActive ? 'ONLINE' : 'OFFLINE'}
+                        </Text>
+                        <Text style={styles.statusDesc}>
+                            {tripActive 
+                                ? 'You are broadcasting your live location to students.' 
+                                : 'You are hidden from students. Start your route to broadcast location.'}
+                        </Text>
+                    </View>
+                )}
 
                 {connecting ? (
                     <ActivityIndicator size="large" color={Theme.colors.primary} />
                 ) : tripActive ? (
-                    <TouchableOpacity style={styles.stopTripBtn} onPress={stopTrip}>
+                    <TouchableOpacity style={[styles.stopTripBtn, { backgroundColor: '#FACC15' }]} onPress={stopTrip}>
                         <View style={styles.stopIconBox}>
-                            <MaterialIcons name="location-off" size={32} color="#fff" />
+                            <MaterialIcons name="location-off" size={32} color="#000" />
                         </View>
-                        <Text style={styles.stopText}>STOP SHARING LOCATION</Text>
+                        <Text style={[styles.stopText, { color: '#000' }]}>STOP SHARING LOCATION</Text>
                     </TouchableOpacity>
                 ) : (
                     <View style={styles.sliderContainer}>
@@ -204,7 +418,7 @@ const DriverHome = ({ navigation }) => {
                             {...panResponder.panHandlers}
                         >
                             <View style={styles.handleInner}>
-                                <MaterialIcons name="location-off" size={32} color={Theme.colors.textSecondaryDark} />
+                                <MaterialIcons name="location-on" size={32} color={Theme.colors.textSecondaryDark} />
                             </View>
                         </Animated.View>
                     </View>
@@ -214,14 +428,6 @@ const DriverHome = ({ navigation }) => {
                     <View style={styles.hintContainer}>
                         <MaterialIcons name="touch-app" size={18} color="#9ca3af" />
                         <Text style={styles.hintText}>Long press or slide to activate</Text>
-                    </View>
-                )}
-                
-                {currentLocation && (
-                    <View style={styles.locationBadge}>
-                         <Text style={styles.coordsText}>
-                            📍 {currentLocation.lat.toFixed(5)}, {currentLocation.lng.toFixed(5)}
-                        </Text>
                     </View>
                 )}
             </View>
@@ -442,6 +648,47 @@ const styles = StyleSheet.create({
         color: Theme.colors.textSecondaryDark,
         fontFamily: 'monospace',
     },
+    mapContainer: {
+        width: '100%',
+        height: 300,
+        borderRadius: 24,
+        overflow: 'hidden',
+        marginBottom: 40,
+        borderWidth: 1,
+        borderColor: Theme.colors.borderLight,
+        backgroundColor: '#f3f4f6',
+    },
+    map: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    markerContainer: {
+        backgroundColor: Theme.colors.primary,
+        padding: 6,
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: '#fff',
+    },
+    mapOverlay: {
+        position: 'absolute',
+        top: 16,
+        left: 16,
+        right: 16,
+    },
+    statusBadge: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+    },
+    statusText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: 'bold',
+        marginLeft: 6,
+    }
 });
 
 export default DriverHome;

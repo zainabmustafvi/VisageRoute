@@ -67,6 +67,10 @@ const driverSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true,
+    },
+    isOnline: {
+        type: Boolean,
+        default: false,
     }
 }, { timestamps: true });
 
