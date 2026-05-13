@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const Driver = require('../models/Driver');
 
 // @desc    Admin/Driver/Parent Login
 // @route   POST /api/auth/login
@@ -39,6 +40,7 @@ const login = async (req, res) => {
     const payload = {
       user: {
         id: user.id,
+        userId: user.userId,
         role: user.role,
       },
     };
@@ -48,7 +50,7 @@ const login = async (req, res) => {
       payload,
       process.env.JWT_SECRET,
       { expiresIn: '30m' },
-      (err, token) => {
+      async (err, token) => {
         if (err) throw err;
 
         // Security: Send token in HTTP-Only Cookie
@@ -59,14 +61,25 @@ const login = async (req, res) => {
           maxAge: 30 * 60 * 1000 // 30 minutes in milliseconds
         });
 
-        res.json({
+        const responseData = {
           message: 'Login successful',
           user: {
             id: user.id,
             userId: user.userId,
             role: user.role
           }
-        });
+        };
+
+        // If driver, add specific IDs for session storage
+        if (role === 'driver') {
+          const driver = await Driver.findOne({ userId: user.userId });
+          if (driver) {
+            responseData.user.driverId = driver._id;
+            responseData.user.assignedBusId = driver.assignedBusId;
+          }
+        }
+
+        res.json(responseData);
       }
     );
   } catch (err) {
