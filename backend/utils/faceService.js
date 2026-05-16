@@ -1,10 +1,3 @@
-/**
- * faceService.js
- * Extracts a 128-d face embedding from a base64 image.
- * Uses @vladmandic/face-api with pure @tensorflow/tfjs (CPU backend).
- * Avoids @tensorflow/tfjs-node to prevent native binary installation issues.
- */
-
 const tf = require('@tensorflow/tfjs');
 require('@tensorflow/tfjs-backend-cpu');
 
@@ -85,11 +78,15 @@ const extractFaceEmbedding = async (imageBase64) => {
         console.log(`Processing image: ${jimpImg.bitmap.width}x${jimpImg.bitmap.height}`);
 
         tensor = jimpToTensor(jimpImg);
+        
+        // Ensure tensor is the right type (float32 is often safer for descriptors)
+        const floatTensor = tf.cast(tensor, 'float32');
+
+        console.log(`[FaceAPI] Tensor ready: ${floatTensor.shape} | Type: ${floatTensor.dtype}`);
 
         // Try with main detector first (SsdMobilenetv1)
-        // Note: In face-api, we should chain after the detector, but we must ensure it doesn't crash
         let detection = await faceapi
-            .detectSingleFace(tensor, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
+            .detectSingleFace(floatTensor, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
             .withFaceLandmarks()
             .withFaceDescriptor();
 
@@ -97,10 +94,13 @@ const extractFaceEmbedding = async (imageBase64) => {
         if (!detection) {
             console.log('Main detector failed, trying TinyFaceDetector fallback...');
             detection = await faceapi
-                .detectSingleFace(tensor, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.3 }))
+                .detectSingleFace(floatTensor, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.3 }))
                 .withFaceLandmarks()
                 .withFaceDescriptor();
         }
+
+        // Cleanup intermediate tensor
+        floatTensor.dispose();
 
         if (!detection) {
             console.log('No face detected with any detector.');
@@ -119,4 +119,19 @@ const extractFaceEmbedding = async (imageBase64) => {
     }
 };
 
-module.exports = { extractFaceEmbedding, loadModels };
+/**
+ * Compares two 128-d face embeddings using Euclidean distance.
+ * @param {number[]} e1 
+ * @param {number[]} e2 
+ * @returns {number} Distance (lower is more similar)
+ */
+const compareEmbeddings = (e1, e2) => {
+    if (!e1 || !e2 || e1.length !== e2.length) return 1.0;
+    let sum = 0;
+    for (let i = 0; i < e1.length; i++) {
+        sum += (e1[i] - e2[i]) ** 2;
+    }
+    return Math.sqrt(sum);
+};
+
+module.exports = { extractFaceEmbedding, loadModels, compareEmbeddings };

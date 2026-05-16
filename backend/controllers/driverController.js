@@ -28,11 +28,16 @@ const getAssignedRoute = async (req, res) => {
         // Fetch the Route Details
         const route = await BusRoute.findById(assignment.routeId);
 
+        // Fetch Bus Details
+        const Bus = require('../models/Bus');
+        const bus = await Bus.findById(driver.assignedBusId);
+
         // Fetch all Students assigned to this Bus
         const students = await Student.find({ busId: driver.assignedBusId });
 
         res.json({
             route,
+            bus,
             students,
         });
 
@@ -90,8 +95,40 @@ const updateTripStatus = async (req, res) => {
     }
 };
 
+// @desc    Get full profile of the logged-in driver
+// @route   GET /api/driver/profile
+// @access  Private/Driver
+const getProfile = async (req, res) => {
+    try {
+        const driver = await Driver.findOne({ userId: req.user.userId }).populate('assignedBusId');
+
+        if (!driver) {
+            return res.status(404).json({ error: 'Driver profile not found.' });
+        }
+
+        res.json({
+            name: driver.name,
+            email: driver.email,
+            phone: driver.phone,
+            employeeId: driver.employeeId,
+            licenseNumber: driver.licenseNumber,
+            licenseExpiry: driver.licenseExpiry,
+            isActive: driver.isActive,
+            bus: driver.assignedBusId ? {
+                busNumber: driver.assignedBusId.busNumber,
+                plateNumber: driver.assignedBusId.plateNumber,
+                capacity: driver.assignedBusId.capacity
+            } : null
+        });
+    } catch (err) {
+        console.error("Profile Fetch Error:", err);
+        res.status(500).json({ error: 'Server Error fetching profile.' });
+    }
+};
+
 module.exports = {
     getAssignedRoute,
     getDashboardData,
-    updateTripStatus
+    updateTripStatus,
+    getProfile
 };

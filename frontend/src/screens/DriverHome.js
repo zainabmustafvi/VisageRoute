@@ -3,7 +3,7 @@ import {
     View, Text, TouchableOpacity, StyleSheet, Alert, Platform, SafeAreaView, ActivityIndicator, Dimensions, Animated, PanResponder
 } from 'react-native';
 import axios from 'axios';
-import MapView, { UrlTile, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import LeafletMap from '../components/LeafletMap';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import * as Battery from 'expo-battery';
@@ -328,48 +328,7 @@ const DriverHome = ({ navigation }) => {
             <View style={styles.main}>
                 {tripActive ? (
                     <View style={styles.mapContainer}>
-                        <MapView
-                            provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : null}
-                            mapType={Platform.OS === 'android' ? 'none' : 'standard'}
-                            style={styles.map}
-                            showsUserLocation={true}
-                            showsMyLocationButton={true}
-                            showsCompass={true}
-                            showsScale={true}
-                            region={currentLocation ? {
-                                latitude: currentLocation.lat,
-                                longitude: currentLocation.lng,
-                                latitudeDelta: 0.01,
-                                longitudeDelta: 0.01,
-                            } : {
-                                latitude: 24.8607,
-                                longitude: 67.0011,
-                                latitudeDelta: 0.05,
-                                longitudeDelta: 0.05,
-                            }}
-                        >
-                            <UrlTile
-                                urlTemplate="https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                maximumZ={19}
-                                flipY={false}
-                                shouldReplaceMapContent={true}
-                                tileSize={256}
-                                zIndex={100}
-                            />
-                            {currentLocation && (
-                                <Marker
-                                    coordinate={{
-                                        latitude: currentLocation.lat,
-                                        longitude: currentLocation.lng,
-                                    }}
-                                    title="Your Location"
-                                >
-                                    <View style={styles.markerContainer}>
-                                        <MaterialCommunityIcons name="bus-side" size={24} color="#fff" />
-                                    </View>
-                                </Marker>
-                            )}
-                        </MapView>
+                        <LeafletMap markers={currentLocation ? [{ coordinate: currentLocation, icon: 'driver' }] : []} />
                         
                         <View style={styles.mapOverlay}>
                              <View style={styles.statusBadge}>

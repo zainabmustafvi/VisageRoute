@@ -17,6 +17,19 @@ const busRouteSchema = new mongoose.Schema({
         departureTime: { type: String, default: 'Not Set' },
         estimatedArrivalTime: { type: String, default: 'Not Set' },
     },
+    stops: [
+        {
+            stopNumber: Number,
+            locationName: String,
+            scheduledTime: String,
+            isStart: { type: Boolean, default: false },
+            isEnd: { type: Boolean, default: false }
+        }
+    ],
+    estimatedDuration: {
+        type: String,
+        default: 'Not Set'
+    },
     status: {
         type: String,
         enum: ['Scheduled', 'In Transit', 'Completed', 'Delayed'],

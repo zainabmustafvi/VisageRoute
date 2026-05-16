@@ -47,12 +47,14 @@ const adminRoutes = require('./routes/adminRoutes');
 const driverRoutes = require('./routes/driverRoutes');
 const parentRoutes = require('./routes/parentRoutes');
 const locationRoutes = require('./routes/locationRoutes');
+const attendanceRoutes = require('./routes/attendanceRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/parent', parentRoutes);
 app.use('/api/location', locationRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 // Placeholder routes
 app.get('/', (req, res) => {
