@@ -8,7 +8,7 @@ const Announcement = require('../models/Announcement');
 // @access  Private/Parent
 const getStudentSchedule = async (req, res) => {
     try {
-        const student = await Student.findOne({ parentId: req.user._id });
+        const student = await Student.findOne({ parentId: req.user.id });
         if (!student) return res.status(404).json({ error: 'No student found' });
         if (!student.busId) return res.status(400).json({ error: 'No bus assigned' });
 
@@ -34,7 +34,7 @@ const getStudentSchedule = async (req, res) => {
 // @access  Private/Parent
 const getAnnouncements = async (req, res) => {
     try {
-        const student = await Student.findOne({ parentId: req.user._id });
+        const student = await Student.findOne({ parentId: req.user.id });
         
         let busId = null;
         let routeId = null;
@@ -61,7 +61,7 @@ const getAnnouncements = async (req, res) => {
 
         // Map to include 'isRead' status for THIS user
         const result = announcements.map(ann => {
-            const isRead = ann.readBy.some(r => r.userId.toString() === req.user._id.toString());
+            const isRead = ann.readBy.some(r => r.userId.toString() === req.user.id.toString());
             return {
                 ...ann.toObject(),
                 isRead
@@ -84,9 +84,9 @@ const markAnnouncementRead = async (req, res) => {
         if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
 
         // Check if already read
-        const alreadyRead = announcement.readBy.some(r => r.userId.toString() === req.user._id.toString());
+        const alreadyRead = announcement.readBy.some(r => r.userId.toString() === req.user.id.toString());
         if (!alreadyRead) {
-            announcement.readBy.push({ userId: req.user._id });
+            announcement.readBy.push({ userId: req.user.id });
             await announcement.save();
         }
 
