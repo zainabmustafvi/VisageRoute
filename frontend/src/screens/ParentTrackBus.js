@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator, Platform
 } from 'react-native';
-import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
+import LeafletMap from '../components/LeafletMap';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import { io } from 'socket.io-client';
@@ -70,16 +70,7 @@ const ParentTrackBus = ({ navigation }) => {
                 setEta(etaMin);
                 setTripStatus('🚌 Bus is on the way!');
 
-                // Auto-animate map to fit both markers
-                if (mapRef.current && myLocation) {
-                    mapRef.current.fitToCoordinates(
-                        [
-                            { latitude: loc.lat, longitude: loc.lng },
-                            { latitude: myLocation.lat, longitude: myLocation.lng },
-                        ],
-                        { edgePadding: { top: 80, right: 60, bottom: 80, left: 60 }, animated: true }
-                    );
-                }
+                // Auto-animate map to fit both markers is handled automatically by LeafletMap component
             });
 
             // 4. Listen for trip completion
@@ -104,6 +95,14 @@ const ParentTrackBus = ({ navigation }) => {
         latitudeDelta: 0.05,
         longitudeDelta: 0.05,
     };
+
+    const mapMarkers = [];
+    if (driverLocation) {
+        mapMarkers.push({ coordinate: driverLocation, icon: 'bus' });
+    }
+    if (myLocation) {
+        mapMarkers.push({ coordinate: myLocation, icon: 'home' });
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -142,36 +141,7 @@ const ParentTrackBus = ({ navigation }) => {
                     </View>
                 ) : (
                     <>
-                        <MapView
-                            ref={mapRef}
-                            style={StyleSheet.absoluteFillObject}
-                            provider={PROVIDER_DEFAULT}
-                            initialRegion={defaultRegion}
-                            showsUserLocation={false}
-                            showsMyLocationButton={false}
-                            mapType={Platform.OS === 'android' ? "none" : "standard"}
-                        >
-                            <UrlTile
-                                urlTemplate="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                shouldReplaceMapContent={true}
-                                maximumZ={19}
-                                flipY={false}
-                            />
-                            {driverLocation && (
-                                <Marker coordinate={{ latitude: driverLocation.lat, longitude: driverLocation.lng }}>
-                                    <View style={styles.busMarker}>
-                                        <MaterialIcons name="directions-bus" size={20} color={Theme.colors.brandGrey} />
-                                    </View>
-                                </Marker>
-                            )}
-                            {myLocation && (
-                                <Marker coordinate={{ latitude: myLocation.lat, longitude: myLocation.lng }}>
-                                    <View style={styles.homeMarker}>
-                                        <MaterialIcons name="home" size={20} color="white" />
-                                    </View>
-                                </Marker>
-                            )}
-                        </MapView>
+                        <LeafletMap markers={mapMarkers} />
                         {!driverLocation && (
                             <View style={styles.mapOverlay}>
                                 <ActivityIndicator size="large" color={Theme.colors.primary} />

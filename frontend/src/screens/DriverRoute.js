@@ -1,26 +1,90 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-    View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView
+    View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, RefreshControl, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
+import axios from 'axios';
+import * as SecureStore from 'expo-secure-store';
 import Theme from '../theme/Theme';
+import { API_BASE_URL } from '../config/api';
 
-const DriverRoute = () => {
-    const stops = [
-        { id: 1, name: 'Central Station', time: '07:00 AM', students: 24, type: 'start' },
-        { id: 2, name: 'North Square', time: '07:25 AM', students: 12, type: 'stop' },
-        { id: 3, name: 'Westside Dorms', time: '07:55 AM', students: 45, type: 'stop' },
-        { id: 4, name: 'Engineering Campus', time: '08:30 AM', students: 0, type: 'end' },
-    ];
+const DriverRoute = ({ navigation }) => {
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [routeData, setRouteData] = useState(null);
+    const [busData, setBusData] = useState(null);
+    const [driverName, setDriverName] = useState('Driver');
+
+    const fetchRouteInfo = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            const response = await axios.get(`${API_BASE_URL}/api/driver/route`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            setRouteData(response.data.route);
+            setBusData(response.data.bus);
+            setLoading(false);
+            setRefreshing(false);
+        } catch (error) {
+            console.error('Error fetching route info:', error);
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchRouteInfo();
+            // Also fetch driver name from dashboard for header
+            const getDriverName = async () => {
+                const token = await SecureStore.getItemAsync('socketToken');
+                const res = await axios.get(`${API_BASE_URL}/api/driver/dashboard`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setDriverName(res.data.name);
+            };
+            getDriverName();
+        }, [])
+    );
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchRouteInfo();
+    };
+
+    if (loading && !refreshing) {
+        return (
+            <SafeAreaView style={[styles.container, styles.centered]}>
+                <ActivityIndicator size="large" color={Theme.colors.primary} />
+            </SafeAreaView>
+        );
+    }
+
+    if (!routeData && !loading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.emptyContainer}>
+                    <MaterialIcons name="event-busy" size={64} color="#ccc" />
+                    <Text style={styles.emptyTitle}>No Active Assignment</Text>
+                    <Text style={styles.emptySubtitle}>You don't have any active bus or route assigned for today.</Text>
+                    <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
+                        <Text style={styles.refreshBtnText}>Check Again</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.driverName}>Sadaat Malik</Text>
+                    <Text style={styles.driverName}>{driverName}</Text>
                     <View style={styles.headerSubtitleRow}>
                         <View style={styles.statusDot} />
-                        <Text style={styles.headerSubtitle}>BUS DRIVER #104</Text>
+                        <Text style={styles.headerSubtitle}>BUS DRIVER #{busData?.busNumber || '...'}</Text>
                     </View>
                 </View>
                 <TouchableOpacity style={styles.logoutBtn}>
@@ -28,11 +92,17 @@ const DriverRoute = () => {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                style={styles.content} 
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Theme.colors.primary]} />
+                }
+            >
                 <View style={styles.titleSection}>
                     <Text style={styles.mainTitle}>Assigned Details</Text>
                     <View style={styles.dateBadge}>
-                        <Text style={styles.dateText}>Oct 24, 2023</Text>
+                        <Text style={styles.dateText}>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
                     </View>
                 </View>
 
@@ -42,17 +112,17 @@ const DriverRoute = () => {
                         <View>
                             <Text style={styles.cardSmallLabel}>VEHICLE DETAILS</Text>
                             <View style={styles.busIdRow}>
-                                <Text style={styles.busId}>#104</Text>
-                                <Text style={styles.busModel}>Volvo 9700</Text>
+                                <Text style={styles.busId}>#{busData?.busNumber || 'N/A'}</Text>
+                                <Text style={styles.busModel}>Bus Vehicle</Text>
                             </View>
                             <View style={styles.badgeRow}>
                                 <View style={styles.vehicleInfoBadge}>
                                     <Text style={styles.infoBadgeLabel}>LICENSE</Text>
-                                    <Text style={styles.infoBadgeValue}>KWY-882</Text>
+                                    <Text style={styles.infoBadgeValue}>{busData?.plateNumber || 'N/A'}</Text>
                                 </View>
                                 <View style={styles.vehicleInfoBadge}>
                                     <Text style={styles.infoBadgeLabel}>CAPACITY</Text>
-                                    <Text style={styles.infoBadgeValue}>54 Seats</Text>
+                                    <Text style={styles.infoBadgeValue}>{busData?.capacity || '0'} Seats</Text>
                                 </View>
                             </View>
                         </View>
@@ -64,8 +134,8 @@ const DriverRoute = () => {
 
                 <View style={styles.routeHeader}>
                     <View>
-                        <Text style={styles.routeTitle}>Route A: Morning Loop</Text>
-                        <Text style={styles.routeDuration}>Est. Duration: 1h 30m</Text>
+                        <Text style={styles.routeTitle}>{routeData?.routeName || 'Unnamed Route'}</Text>
+                        <Text style={styles.routeDuration}>Est. Duration: {routeData?.estimatedDuration || 'N/A'}</Text>
                     </View>
                     <View style={styles.mapIconBtn}>
                         <MaterialIcons name="map" size={20} color={Theme.colors.textSecondaryLight} />
@@ -74,33 +144,40 @@ const DriverRoute = () => {
 
                 <View style={styles.stopsContainer}>
                     <View style={styles.timelineLine} />
-                    {stops.map((stop, index) => (
-                        <View key={stop.id} style={styles.stopItem}>
-                            <View style={[
-                                styles.stopIconContainer,
-                                stop.type === 'start' && styles.startIcon,
-                                stop.type === 'end' && styles.endIcon,
-                                stop.type === 'stop' && styles.midIcon
-                            ]}>
-                                <MaterialIcons 
-                                    name={stop.type === 'start' ? 'flag' : stop.type === 'end' ? 'school' : 'place'} 
-                                    size={18} 
-                                    color={stop.type === 'start' ? Theme.colors.brandGrey : stop.type === 'end' ? '#fff' : Theme.colors.textSecondaryLight} 
-                                />
-                            </View>
-                            <View style={styles.stopInfo}>
-                                <View style={styles.stopTextRow}>
-                                    <Text style={[styles.stopName, stop.type === 'stop' && styles.midStopName]}>{stop.name}</Text>
-                                    <View style={[styles.timeBadge, stop.type === 'start' && styles.startTimeBadge]}>
-                                        <Text style={[styles.timeText, stop.type === 'start' && styles.startTimeText]}>{stop.time}</Text>
-                                    </View>
+                    {(routeData?.stops || []).length > 0 ? (
+                        routeData.stops.map((stop, index) => (
+                            <View key={index} style={styles.stopItem}>
+                                <View style={[
+                                    styles.stopIconContainer,
+                                    stop.isStart && styles.startIcon,
+                                    stop.isEnd && styles.endIcon,
+                                    (!stop.isStart && !stop.isEnd) && styles.midIcon
+                                ]}>
+                                    <MaterialIcons 
+                                        name={stop.isStart ? 'flag' : stop.isEnd ? 'school' : 'place'} 
+                                        size={18} 
+                                        color={stop.isStart ? Theme.colors.brandGrey : stop.isEnd ? '#fff' : Theme.colors.textSecondaryLight} 
+                                    />
                                 </View>
-                                <Text style={styles.stopSubtitle}>
-                                    {stop.type === 'start' ? 'Start Point' : stop.type === 'end' ? 'Drop-off Point' : 'Bus Stop'}
-                                </Text>
+                                <View style={styles.stopInfo}>
+                                    <View style={styles.stopTextRow}>
+                                        <Text style={[styles.stopName, (!stop.isStart && !stop.isEnd) && styles.midStopName]}>{stop.locationName}</Text>
+                                        <View style={[styles.timeBadge, stop.isStart && styles.startTimeBadge]}>
+                                            <Text style={[styles.timeText, stop.isStart && styles.startTimeText]}>{stop.scheduledTime}</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={styles.stopSubtitle}>
+                                        {stop.isStart ? 'Start Point' : stop.isEnd ? 'Drop Point / Route End' : `Stop #${stop.stopNumber || index + 1}`}
+                                    </Text>
+                                </View>
                             </View>
+                        ))
+                    ) : (
+                        <View style={styles.noStopsBox}>
+                            <MaterialIcons name="info-outline" size={24} color="#ccc" />
+                            <Text style={styles.noStopsText}>No stop information available for this route.</Text>
                         </View>
-                    ))}
+                    )}
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -111,6 +188,49 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: Theme.colors.backgroundLight,
+    },
+    centered: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    emptyTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: Theme.colors.brandGrey,
+        marginTop: 20,
+    },
+    emptySubtitle: {
+        fontSize: 14,
+        color: '#6b7280',
+        textAlign: 'center',
+        marginTop: 10,
+        lineHeight: 20,
+    },
+    refreshBtn: {
+        marginTop: 30,
+        backgroundColor: Theme.colors.primary,
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 12,
+    },
+    refreshBtnText: {
+        fontWeight: 'bold',
+        color: '#000',
+    },
+    noStopsBox: {
+        alignItems: 'center',
+        paddingVertical: 20,
+    },
+    noStopsText: {
+        fontSize: 12,
+        color: '#9ca3af',
+        marginTop: 8,
     },
     header: {
         flexDirection: 'row',
