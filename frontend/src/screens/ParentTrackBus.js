@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator, Platform
+    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator, Platform, Linking
 } from 'react-native';
 import LeafletMap from '../components/LeafletMap';
 import * as Location from 'expo-location';
@@ -8,28 +8,47 @@ import * as SecureStore from 'expo-secure-store';
 import { io } from 'socket.io-client';
 import { MaterialIcons } from '@expo/vector-icons';
 import Theme from '../theme/Theme';
-
-// ⚠️ Update to your machine's IP on the same Wi-Fi network
+import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
+
 const SOCKET_URL = API_BASE_URL;
 
-// Placeholder: In production, fetch the child's assigned routeId from the API
-const CHILD_ROUTE_ID = '000000000000000000000001';
-
-const ParentTrackBus = ({ navigation }) => {
+const ParentTrackBus = ({ route, navigation }) => {
+    const studentId = route?.params?.studentId;
+    const [childStatus, setChildStatus] = useState(null);
     const [driverLocation, setDriverLocation] = useState(null);
     const [myLocation, setMyLocation] = useState(null);
     const [eta, setEta] = useState(null);
     const [tripStatus, setTripStatus] = useState('Waiting for driver to start trip...');
     const [connected, setConnected] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const socketRef = useRef(null);
-    const mapRef = useRef(null);
+
+    const fetchStatus = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            const res = await axios.get(`${API_BASE_URL}/api/parent/child-status?studentId=${studentId || ''}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setChildStatus(res.data);
+            if (res.data.routeInfo?.eta) {
+                setEta(res.data.routeInfo.eta);
+            }
+        } catch (error) {
+            console.error('Error fetching child status in tracking:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     useEffect(() => {
         let socket;
 
         const setupTracking = async () => {
-            // 1. Request location permission to show parent's own position
+            // 1. Fetch child status to get routeId
+            await fetchStatus();
+
+            // 2. Request location permission to show parent's own position
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status === 'granted') {
                 const loc = await Location.getCurrentPositionAsync({});
@@ -39,7 +58,7 @@ const ParentTrackBus = ({ navigation }) => {
                 });
             }
 
-            // 2. Connect to socket with stored JWT
+            // 3. Connect to socket with stored JWT
             const token = await SecureStore.getItemAsync('socketToken');
             if (!token) {
                 Alert.alert('Session Error', 'Please log in again.');
@@ -55,8 +74,11 @@ const ParentTrackBus = ({ navigation }) => {
             socket.on('connect', () => {
                 console.log('[Parent Socket] Connected:', socket.id);
                 setConnected(true);
-                // Join route room to receive driver's location updates
-                socket.emit('joinRouteRoom', CHILD_ROUTE_ID);
+                
+                // Fetch the student's routeId and join route room to receive driver's location updates
+                if (childStatus?.routeInfo?.routeId) {
+                    socket.emit('joinRouteRoom', childStatus.routeInfo.routeId);
+                }
             });
 
             socket.on('connect_error', (err) => {
@@ -64,16 +86,14 @@ const ParentTrackBus = ({ navigation }) => {
                 setTripStatus('⚠️ Could not connect to server. Check your network.');
             });
 
-            // 3. Listen for live location updates from the driver
+            // 4. Listen for live location updates from the driver
             socket.on('locationUpdate', ({ driverLocation: loc, eta: etaMin }) => {
                 setDriverLocation(loc);
                 setEta(etaMin);
                 setTripStatus('🚌 Bus is on the way!');
-
-                // Auto-animate map to fit both markers is handled automatically by LeafletMap component
             });
 
-            // 4. Listen for trip completion
+            // 5. Listen for trip completion
             socket.on('tripEnded', ({ message }) => {
                 setTripStatus(`✅ ${message}`);
                 setEta(null);
@@ -87,7 +107,41 @@ const ParentTrackBus = ({ navigation }) => {
         return () => {
             if (socket) socket.disconnect();
         };
-    }, []);
+    }, [studentId, childStatus?.routeInfo?.routeId]);
+
+    const handleCallDriver = () => {
+        const phone = childStatus?.driverInfo?.phone;
+        if (phone) {
+            Linking.openURL(`tel:${phone}`);
+        } else {
+            Alert.alert('Unavailable', 'Driver phone number not provided.');
+        }
+    };
+
+    const formatTime = (timeStr) => {
+        if (!timeStr) return '';
+        const d = new Date(timeStr);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const TimelineItem = ({ title, status, time, isCompleted, isActive, icon }) => (
+        <View style={[styles.timelineItem, !isCompleted && !isActive && { opacity: 0.5 }]}>
+            <View style={[
+                styles.timelineDot, 
+                isActive && styles.dotActive, 
+                isCompleted && { backgroundColor: '#22c55e' }
+            ]}>
+                <MaterialIcons 
+                    name={isCompleted ? "check" : icon} 
+                    size={isCompleted ? 12 : 14} 
+                    color={(isCompleted || isActive) ? "white" : "#9ca3af"} 
+                />
+            </View>
+            <Text style={isActive ? styles.timelineLabelActive : styles.timelineLabel}>{title}</Text>
+            {status ? <Text style={styles.timelineStatus}>{status}</Text> : null}
+            {time ? <Text style={styles.timelineTime}>{time}</Text> : null}
+        </View>
+    );
 
     const defaultRegion = {
         latitude: myLocation?.lat || 24.8607,
@@ -102,6 +156,15 @@ const ParentTrackBus = ({ navigation }) => {
     }
     if (myLocation) {
         mapMarkers.push({ coordinate: myLocation, icon: 'home' });
+    }
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={Theme.colors.primary} />
+                <Text style={{ marginTop: 10, color: '#6b7280' }}>Loading live tracking...</Text>
+            </SafeAreaView>
+        );
     }
 
     return (
@@ -121,8 +184,12 @@ const ParentTrackBus = ({ navigation }) => {
                             <MaterialIcons name="directions-bus" size={24} color={Theme.colors.brandGrey} />
                         </View>
                         <View>
-                            <Text style={styles.busIdText}>Bus #42 - Route A</Text>
-                            <Text style={styles.driverText}>Driver: Malik Haris</Text>
+                            <Text style={styles.busIdText}>
+                                Bus #{childStatus?.student?.busNumber || 'N/A'}
+                            </Text>
+                            <Text style={styles.driverText}>
+                                Driver: {childStatus?.driverInfo?.name || 'Not assigned'}
+                            </Text>
                         </View>
                     </View>
                     <View style={styles.statusRight}>
@@ -145,7 +212,7 @@ const ParentTrackBus = ({ navigation }) => {
                         {!driverLocation && (
                             <View style={styles.mapOverlay}>
                                 <ActivityIndicator size="large" color={Theme.colors.primary} />
-                                <Text style={styles.overlayText}>Waiting for live bus location...</Text>
+                                <Text style={styles.overlayText}>{tripStatus}</Text>
                             </View>
                         )}
                     </>
@@ -168,26 +235,51 @@ const ParentTrackBus = ({ navigation }) => {
                         <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE TRACKING</Text></View>
                     </View>
                     
-                    {/* Mock Timeline */}
+                    {/* Timeline */}
                     <View style={styles.timeline}>
-                        <View style={[styles.timelineItem, { opacity: 0.5 }]}>
-                            <View style={styles.timelineDot}><MaterialIcons name="check" size={12} color="white" /></View>
-                            <Text style={styles.timelineLabel}>G-11</Text>
-                        </View>
+                        <TimelineItem 
+                            title="Start" 
+                            status={childStatus?.routeInfo?.driverOnline ? "Started" : "Pending"}
+                            time={formatTime(childStatus?.routeInfo?.wentOnlineAt)}
+                            isCompleted={!!childStatus?.routeInfo?.wentOnlineAt}
+                            isActive={childStatus?.routeInfo?.driverOnline}
+                            icon="play-arrow"
+                        />
                         <View style={styles.timelineLine} />
-                        <View style={styles.timelineItem}>
-                            <View style={[styles.timelineDot, styles.dotActive]}><MaterialIcons name="directions-bus" size={14} color={Theme.colors.brandGrey} /></View>
-                            <Text style={styles.timelineLabelActive}>Golra</Text>
-                            <Text style={styles.timelineStatus}>In Progress</Text>
-                        </View>
+                        <TimelineItem 
+                            title="Boarded" 
+                            status={childStatus?.attendance?.status === 'boarded' ? "On Board" : "Pending"}
+                            time={formatTime(childStatus?.attendance?.boardingTime)}
+                            isCompleted={childStatus?.attendance?.status === 'boarded'}
+                            isActive={childStatus?.routeInfo?.driverOnline && childStatus?.attendance?.status !== 'boarded'}
+                            icon="directions-bus"
+                        />
                         <View style={styles.timelineLine} />
-                        <View style={styles.timelineItem}>
-                            <View style={[styles.timelineDot, { backgroundColor: Theme.colors.brandGrey }]}><MaterialIcons name="location-on" size={14} color="white" /></View>
-                            <Text style={styles.timelineLabel}>Dhok Pracha</Text>
-                            <Text style={styles.timelineTime}>8:55 AM</Text>
-                        </View>
+                        <TimelineItem 
+                            title="ETA" 
+                            status={eta ? `${eta} min` : "N/A"}
+                            isCompleted={false}
+                            isActive={childStatus?.routeInfo?.driverOnline}
+                            icon="schedule"
+                        />
+                        <View style={styles.timelineLine} />
+                        <TimelineItem 
+                            title="Dropped Off" 
+                            status={childStatus?.attendance?.alightingTime ? "Dropped Off" : "Pending"}
+                            time={formatTime(childStatus?.attendance?.alightingTime)}
+                            isCompleted={!!childStatus?.attendance?.alightingTime}
+                            isActive={false}
+                            icon="location-on"
+                        />
                     </View>
 
+                    {/* Actions */}
+                    <View style={styles.actionRow}>
+                        <TouchableOpacity style={styles.callBtn} onPress={handleCallDriver}>
+                            <MaterialIcons name="phone" size={20} color={Theme.colors.brandGrey} />
+                            <Text style={styles.callBtnText}>Call Driver</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
         </SafeAreaView>
