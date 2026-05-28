@@ -24,9 +24,12 @@ const attendanceSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+    alightingTime: {
+        type: Date,
+    },
     status: {
         type: String,
-        enum: ['boarded', 'absent'],
+        enum: ['boarded', 'dropped_off', 'absent'],
         default: 'boarded',
     },
     verificationMethod: {

@@ -1,12 +1,82 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Platform
+    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Platform, ActivityIndicator
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Theme from '../theme/Theme';
+import axios from 'axios';
+import * as SecureStore from 'expo-secure-store';
+import { API_BASE_URL } from '../config/api';
 
-const ParentSchedule = ({ navigation }) => {
-    
+const ParentSchedule = ({ route, navigation }) => {
+    const routeStudentId = route?.params?.studentId;
+    const [students, setStudents] = useState([]);
+    const [selectedStudentId, setSelectedStudentId] = useState(routeStudentId || null);
+    const [scheduleData, setScheduleData] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchStudents = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            const profileRes = await axios.get(`${API_BASE_URL}/api/parent/profile`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const children = profileRes.data.children || [];
+            setStudents(children);
+            if (children.length > 0 && !selectedStudentId) {
+                setSelectedStudentId(children[0].id);
+            }
+        } catch (error) {
+            console.error('Error fetching students for schedule:', error);
+        }
+    };
+
+    const fetchSchedule = async (studentId) => {
+        if (!studentId) return;
+        setIsLoading(true);
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            const res = await axios.get(`${API_BASE_URL}/api/parent/schedule?studentId=${studentId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setScheduleData(res.data);
+        } catch (error) {
+            console.error('Error fetching schedule:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchStudents();
+    }, []);
+
+    useEffect(() => {
+        if (selectedStudentId) {
+            fetchSchedule(selectedStudentId);
+        }
+    }, [selectedStudentId]);
+
+    const getCurrentWeekDates = () => {
+        const today = new Date();
+        const day = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
+        const mondayDiff = today.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(today.setDate(mondayDiff));
+        
+        return [0, 1, 2, 3, 4].map(idx => {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + idx);
+            return {
+                dayNum: d.getDate(),
+                dayName: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][idx],
+                dayOfWeekIndex: idx + 1
+            };
+        });
+    };
+
+    const weekDates = getCurrentWeekDates();
+    const todayIndex = new Date().getDay(); // 1 = Mon, 2 = Tue, etc.
+
     const DayItem = ({ day, date, pickupTime, dropoffTime, isActive, isCurrent, specialNote }) => (
         <View style={[styles.dayCard, isActive && styles.dayCardActive, isCurrent && styles.dayCardToday]}>
             {isCurrent && <View style={styles.todayBadge}><Text style={styles.todayText}>Today</Text></View>}
@@ -44,6 +114,19 @@ const ParentSchedule = ({ navigation }) => {
         </View>
     );
 
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={Theme.colors.primary} />
+                <Text style={{ marginTop: 10, color: '#6b7280' }}>Loading schedule...</Text>
+            </SafeAreaView>
+        );
+    }
+
+    const assignmentsExist = scheduleData?.schedule && scheduleData.schedule.length > 0;
+    const morningAssignment = assignmentsExist ? scheduleData.schedule[0] : null;
+    const rangeText = `${weekDates[0].dayName} ${weekDates[0].dayNum} - ${weekDates[4].dayNum}`;
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
@@ -55,6 +138,7 @@ const ParentSchedule = ({ navigation }) => {
                     <Text style={styles.headerTitle}>Weekly Schedule</Text>
                     <Text style={styles.headerSub}>PARENT PORTAL</Text>
                 </View>
+                <View style={{ width: 24 }} />
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -62,7 +146,7 @@ const ParentSchedule = ({ navigation }) => {
                 <View style={styles.titleRow}>
                     <Text style={styles.h2}>Weekly Schedule</Text>
                     <View style={styles.rangeBadge}>
-                        <Text style={styles.rangeText}>Oct 23 - 27</Text>
+                        <Text style={styles.rangeText}>{rangeText}</Text>
                         <MaterialIcons name="calendar-today" size={14} color="#6b7280" />
                     </View>
                 </View>
@@ -74,91 +158,102 @@ const ParentSchedule = ({ navigation }) => {
                             <MaterialIcons name="face" size={24} color="#3b82f6" />
                         </View>
                         <View>
-                            <Text style={styles.kidName}>Amna</Text>
-                            <Text style={styles.kidSub}>Bus #42 • Route A</Text>
+                            <Text style={styles.kidName}>{scheduleData?.student?.name || 'Child'}</Text>
+                            <Text style={styles.kidSub}>
+                                {scheduleData?.student?.busNumber ? `Bus #${scheduleData.student.busNumber}` : 'No Bus'} • {scheduleData?.student?.routeName || 'No assigned route'}
+                            </Text>
                         </View>
                     </View>
+                    {students.length > 1 && (
+                        <TouchableOpacity 
+                            style={styles.changeBtn} 
+                            onPress={() => {
+                                const currentIndex = students.findIndex(s => s.id === selectedStudentId);
+                                const nextIndex = (currentIndex + 1) % students.length;
+                                setSelectedStudentId(students[nextIndex].id);
+                            }}
+                        >
+                            <Text style={styles.changeBtnText}>Switch</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
-                {/* Driver Details */}
-                <View style={styles.infoSection}>
-                    <View style={styles.sectionTitleRow}>
-                        <MaterialIcons name="badge" size={14} color="#9ca3af" />
-                        <Text style={styles.sectionTitle}>DRIVER DETAILS</Text>
+                {scheduleData?.noBusAssigned || !assignmentsExist ? (
+                    <View style={styles.emptyStateContainer}>
+                        <MaterialIcons name="info-outline" size={48} color="#9ca3af" />
+                        <Text style={styles.emptyStateText}>No active schedule or bus assignment found.</Text>
                     </View>
-                    <View style={styles.driverCard}>
-                        <View style={styles.driverLeft}>
-                            <View style={styles.driverIconBox}>
-                                <MaterialIcons name="directions-bus" size={24} color="#9ca3af" />
+                ) : (
+                    <>
+                        {/* Driver Details */}
+                        <View style={styles.infoSection}>
+                            <View style={styles.sectionTitleRow}>
+                                <MaterialIcons name="badge" size={14} color="#9ca3af" />
+                                <Text style={styles.sectionTitle}>DRIVER DETAILS</Text>
                             </View>
-                            <View>
-                                <Text style={styles.driverName}>Sadaat Malik</Text>
-                                <Text style={styles.driverPhone}>+1 (555) 012-3456</Text>
+                            <View style={styles.driverCard}>
+                                <View style={styles.driverLeft}>
+                                    <View style={styles.driverIconBox}>
+                                        <MaterialIcons name="directions-bus" size={24} color="#9ca3af" />
+                                    </View>
+                                    <View>
+                                        <Text style={styles.driverName}>{scheduleData?.driver?.name || 'Not Assigned'}</Text>
+                                        <Text style={styles.driverPhone}>{scheduleData?.driver?.phone || 'No phone number'}</Text>
+                                    </View>
+                                </View>
                             </View>
                         </View>
-                    </View>
-                </View>
 
-                {/* Admin Upload Information */}
-                <View style={styles.infoSection}>
-                    <View style={styles.sectionTitleRow}>
-                        <MaterialIcons name="admin-panel-settings" size={14} color="#9ca3af" />
-                        <Text style={styles.sectionTitle}>ADMIN UPLOAD</Text>
-                        <View style={styles.csvBadge}><Text style={styles.csvText}>CSV Parsed</Text></View>
-                    </View>
-                    <View style={styles.csvCard}>
-                        <View style={styles.csvIconBox}>
-                            <MaterialIcons name="table-view" size={24} color="#16a34a" />
+                        {/* Admin Upload Information */}
+                        <View style={styles.infoSection}>
+                            <View style={styles.sectionTitleRow}>
+                                <MaterialIcons name="admin-panel-settings" size={14} color="#9ca3af" />
+                                <Text style={styles.sectionTitle}>ADMIN UPLOAD</Text>
+                                <View style={styles.csvBadge}><Text style={styles.csvText}>CSV Parsed</Text></View>
+                            </View>
+                            <View style={styles.csvCard}>
+                                <View style={styles.csvIconBox}>
+                                    <MaterialIcons name="table-view" size={24} color="#16a34a" />
+                                </View>
+                                <View style={{flex: 1}}>
+                                    <Text style={styles.csvName} numberOfLines={1}>
+                                        {morningAssignment?.fileName || 'Schedule_Template.csv'}
+                                    </Text>
+                                    <Text style={styles.csvDate}>
+                                        Uploaded {morningAssignment?.updatedAt ? new Date(morningAssignment.updatedAt).toLocaleDateString() : 'Recently'}
+                                    </Text>
+                                </View>
+                            </View>
                         </View>
-                        <View style={{flex: 1}}>
-                            <Text style={styles.csvName} numberOfLines={1}>Schedule_Wk42_Final.csv</Text>
-                            <Text style={styles.csvDate}>Uploaded Oct 22 • 145 KB</Text>
+
+                        {/* Timeline */}
+                        <View style={styles.timelineSection}>
+                            {weekDates.map(dateObj => {
+                                const isCurrent = dateObj.dayOfWeekIndex === todayIndex;
+                                const isNext = dateObj.dayOfWeekIndex === (todayIndex % 5) + 1;
+                                const isPast = dateObj.dayOfWeekIndex < todayIndex;
+
+                                return (
+                                    <DayItem 
+                                        key={dateObj.dayOfWeekIndex}
+                                        day={dateObj.dayName} 
+                                        date={dateObj.dayNum} 
+                                        pickupTime={{ 
+                                            time: morningAssignment?.pickupTime || '07:30 AM', 
+                                            completed: isPast 
+                                        }}
+                                        dropoffTime={{ 
+                                            time: morningAssignment?.dropTime || '03:30 PM', 
+                                            next: isNext 
+                                        }}
+                                        isActive={isCurrent || isPast || isNext}
+                                        isCurrent={isCurrent}
+                                    />
+                                );
+                            })}
                         </View>
-                        <TouchableOpacity style={styles.viewBtn}><MaterialIcons name="visibility" size={18} color="#9ca3af" /></TouchableOpacity>
-                    </View>
-                    <View style={styles.infoRow}>
-                        <MaterialIcons name="info" size={14} color="#9ca3af" />
-                        <Text style={styles.infoText}>This schedule was automatically generated from the administrator's latest CSV file upload.</Text>
-                    </View>
-                </View>
-
-                {/* Timeline */}
-                <View style={styles.timelineSection}>
-                    <DayItem 
-                        day="Mon" 
-                        date="23" 
-                        pickupTime={{ time: '07:30 AM', completed: false }}
-                        dropoffTime={{ time: '03:30 PM', next: false }}
-                        isActive={false}
-                        isCurrent={false}
-                    />
-                    <DayItem 
-                        day="Tue" 
-                        date="24" 
-                        pickupTime={{ time: '07:30 AM', completed: true }}
-                        dropoffTime={{ time: '03:30 PM', next: true }}
-                        isActive={true}
-                        isCurrent={true}
-                    />
-                    <DayItem 
-                        day="Wed" 
-                        date="25" 
-                        pickupTime={{ time: '07:30 AM', completed: false }}
-                        dropoffTime={{ time: '01:00 PM', next: false }}
-                        isActive={true}
-                        isCurrent={false}
-                        specialNote="Early Drop-off (Staff Dev)"
-                    />
-                    <DayItem 
-                        day="Thu" 
-                        date="26" 
-                        pickupTime={{ time: '07:30 AM', completed: false }}
-                        dropoffTime={{ time: '03:30 PM', next: false }}
-                        isActive={true}
-                        isCurrent={false}
-                    />
-                </View>
-
+                    </>
+                )}
             </ScrollView>
 
             {/* Bottom Nav Placeholder */}
@@ -167,7 +262,7 @@ const ParentSchedule = ({ navigation }) => {
                     <MaterialIcons name="home" size={28} color="#9ca3af" />
                     <Text style={styles.navText}>Home</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentTrackBus')}>
+                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentTrackBus', { studentId: selectedStudentId })}>
                     <MaterialIcons name="map" size={28} color="#9ca3af" />
                     <Text style={styles.navText}>Map</Text>
                 </TouchableOpacity>
@@ -176,7 +271,7 @@ const ParentSchedule = ({ navigation }) => {
                     <Text style={[styles.navText, { color: Theme.colors.primary }]}>Schedule</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentAnnouncements')}>
-                    <MaterialIcons name="feedback" size={28} color="#9ca3af" />
+                    <MaterialIcons name="notifications" size={28} color="#9ca3af" />
                     <Text style={styles.navText}>Alerts</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentProfile')}>
@@ -219,21 +314,6 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#9ca3af',
         letterSpacing: 1.5,
-    },
-    notificationBtn: {
-        padding: 5,
-        position: 'relative',
-    },
-    dot: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        width: 8,
-        height: 8,
-        backgroundColor: Theme.colors.primary,
-        borderRadius: 4,
-        borderWidth: 2,
-        borderColor: 'white',
     },
     scrollContent: {
         padding: 24,
@@ -361,18 +441,6 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#9ca3af',
     },
-    driverActions: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    circleBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#fef3c7',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
     csvBadge: {
         marginLeft: 'auto',
         backgroundColor: '#f0fdf4',
@@ -413,21 +481,6 @@ const styles = StyleSheet.create({
     csvDate: {
         fontSize: 11,
         color: '#9ca3af',
-    },
-    viewBtn: {
-        padding: 8,
-    },
-    infoRow: {
-        flexDirection: 'row',
-        gap: 8,
-        marginTop: 12,
-        paddingHorizontal: 4,
-    },
-    infoText: {
-        fontSize: 10,
-        color: '#9ca3af',
-        flex: 1,
-        lineHeight: 14,
     },
     timelineSection: {
         gap: 16,
@@ -566,18 +619,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginTop: 4,
     },
-    footerLink: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 16,
-        gap: 4,
-    },
-    footerLinkText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#9ca3af',
-    },
     bottomNav: {
         position: 'absolute',
         bottom: 0,
@@ -599,6 +640,23 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#9ca3af',
     },
+    emptyStateContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        backgroundColor: 'white',
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        marginTop: 20
+    },
+    emptyStateText: {
+        marginTop: 12,
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#6b7280',
+        textAlign: 'center'
+    }
 });
 
 export default ParentSchedule;

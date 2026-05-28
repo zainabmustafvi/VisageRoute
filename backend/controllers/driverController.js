@@ -81,9 +81,13 @@ const getDashboardData = async (req, res) => {
 const updateTripStatus = async (req, res) => {
     try {
         const { isOnline } = req.body;
+        const updateData = { isOnline };
+        if (isOnline) {
+            updateData.wentOnlineAt = new Date();
+        }
         const driver = await Driver.findOneAndUpdate(
             { userId: req.user.userId },
-            { isOnline },
+            updateData,
             { new: true }
         );
 
