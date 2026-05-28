@@ -1,14 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Switch, Platform
+    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Switch, Platform, ActivityIndicator, Alert
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Theme from '../theme/Theme';
+import axios from 'axios';
+import * as SecureStore from 'expo-secure-store';
+import { API_BASE_URL } from '../config/api';
 
 const ParentNotifications = ({ navigation }) => {
     const [arrivalNotify, setArrivalNotify] = useState(true);
     const [startNotify, setStartNotify] = useState(true);
-    const [onBoardNotify, setOnBoardNotify] = useState(false);
+    const [onBoardNotify, setOnBoardNotify] = useState(true);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchPreferences = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            const res = await axios.get(`${API_BASE_URL}/api/parent/preferences`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setArrivalNotify(res.data.arrival_notify);
+            setStartNotify(res.data.start_notify);
+            setOnBoardNotify(res.data.onboard_notify);
+        } catch (error) {
+            console.error('Error fetching preferences:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleToggle = async (key, val, setter) => {
+        // Optimistic UI update
+        setter(val);
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            await axios.patch(`${API_BASE_URL}/api/parent/preferences`, {
+                preference_key: key,
+                value: val
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch (error) {
+            console.error('Error saving preference:', error);
+            // Revert state
+            setter(!val);
+            Alert.alert('Error', 'Failed to update preference. Please check your connection.');
+        }
+    };
+
+    useEffect(() => {
+        fetchPreferences();
+    }, []);
 
     const SettingItem = ({ icon, title, subtitle, value, onToggle, color }) => (
         <View style={styles.settingItem}>
@@ -29,6 +72,15 @@ const ParentNotifications = ({ navigation }) => {
             />
         </View>
     );
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={Theme.colors.primary} />
+                <Text style={{ marginTop: 10, color: '#6b7280' }}>Loading preferences...</Text>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -55,7 +107,7 @@ const ParentNotifications = ({ navigation }) => {
                             title="Arrival Push Notify" 
                             subtitle="Get notified when bus is nearby" 
                             value={arrivalNotify} 
-                            onToggle={setArrivalNotify}
+                            onToggle={(val) => handleToggle('arrival_notify', val, setArrivalNotify)}
                             color="#f59e0b"
                         />
                         <View style={styles.divider} />
@@ -64,16 +116,16 @@ const ParentNotifications = ({ navigation }) => {
                             title="Start Notification" 
                             subtitle="Alert when the route starts" 
                             value={startNotify} 
-                            onToggle={setStartNotify}
+                            onToggle={(val) => handleToggle('start_notify', val, setStartNotify)}
                             color="#3b82f6"
                         />
                         <View style={styles.divider} />
                         <SettingItem 
                             icon="child-care" 
                             title="On Board Child Notification" 
-                            subtitle="Know when Amna is on board" 
+                            subtitle="Know when child is on board" 
                             value={onBoardNotify} 
-                            onToggle={setOnBoardNotify}
+                            onToggle={(val) => handleToggle('onboard_notify', val, setOnBoardNotify)}
                             color="#22c55e"
                         />
                     </View>

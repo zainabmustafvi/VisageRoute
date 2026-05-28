@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Image, Platform, ActivityIndicator
 } from 'react-native';
@@ -8,43 +8,113 @@ import Theme from '../theme/Theme';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 import { useFocusEffect } from '@react-navigation/native';
+import { io } from 'socket.io-client';
 
 const ParentHome = ({ navigation }) => {
     const [latestAnnouncement, setLatestAnnouncement] = useState(null);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [parentName, setParentName] = useState('Parent');
+    const [students, setStudents] = useState([]);
+    const [selectedStudentId, setSelectedStudentId] = useState(null);
+    const [childStatus, setChildStatus] = useState(null);
+    const socketRef = useRef(null);
 
-    const fetchData = async () => {
+    const fetchData = async (targetStudentId = null) => {
         try {
             const token = await SecureStore.getItemAsync('socketToken');
+            if (!token) return;
+
+            // Fetch Announcements
             const res = await axios.get(`${API_BASE_URL}/api/parent/announcements`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
             const announcements = res.data;
             setLatestAnnouncement(announcements[0] || null);
             setUnreadCount(announcements.filter(a => !a.isRead).length);
-            
-            const name = await SecureStore.getItemAsync('userName');
-            if (name) setParentName(name);
-        } catch (error) {
-            if (error.response?.status === 404) {
-                setLatestAnnouncement(null);
-                setUnreadCount(0);
-            } else {
-                console.error('Error fetching home data:', error);
+
+            // Fetch Parent Profile & Students
+            const profileRes = await axios.get(`${API_BASE_URL}/api/parent/profile`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setParentName(profileRes.data.parent.parentName);
+            const children = profileRes.data.children || [];
+            setStudents(children);
+
+            // Fetch Child Status
+            const activeId = targetStudentId || selectedStudentId || children[0]?.id;
+            if (activeId) {
+                if (!selectedStudentId) setSelectedStudentId(activeId);
+                const statusRes = await axios.get(`${API_BASE_URL}/api/parent/child-status?studentId=${activeId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setChildStatus(statusRes.data);
             }
+        } catch (error) {
+            console.error('Error fetching home data:', error);
         } finally {
             setIsLoading(false);
         }
     };
 
+    // Auto refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            fetchData();
+        }, 30000); // 30 seconds
+        return () => clearInterval(interval);
+    }, [selectedStudentId]);
+
+    // Socket connection for instant updates
+    useEffect(() => {
+        let socket;
+        const initSocketConnection = async () => {
+            const token = await SecureStore.getItemAsync('socketToken');
+            if (!token) return;
+
+            socket = io(API_BASE_URL, {
+                auth: { token },
+                transports: ['websocket'],
+            });
+
+            socket.on('connect', () => {
+                console.log('[Parent Home Socket] Connected');
+            });
+
+            // Listen for attendance updates
+            socket.on('attendanceUpdate', (data) => {
+                // If it relates to our active child, refresh status
+                if (data.studentId === selectedStudentId) {
+                    fetchData(selectedStudentId);
+                }
+            });
+
+            // Listen for new announcements
+            socket.on('newAnnouncement', () => {
+                fetchData(selectedStudentId);
+            });
+
+            socketRef.current = socket;
+        };
+
+        initSocketConnection();
+
+        return () => {
+            if (socket) socket.disconnect();
+        };
+    }, [selectedStudentId]);
+
     useFocusEffect(
         useCallback(() => {
             fetchData();
-        }, [])
+        }, [selectedStudentId])
     );
+
+    const handleSelectStudent = (id) => {
+        setSelectedStudentId(id);
+        setIsLoading(true);
+        fetchData(id);
+    };
 
     const handleLogout = async () => {
         await SecureStore.deleteItemAsync('userRole');
@@ -66,6 +136,58 @@ const ParentHome = ({ navigation }) => {
             <MaterialIcons name="chevron-right" size={24} color="#d1d5db" />
         </TouchableOpacity>
     );
+
+    // Format times elegantly
+    const formatTime = (timeStr) => {
+        if (!timeStr) return '';
+        const d = new Date(timeStr);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    // Render child card status content
+    const renderCardStatus = () => {
+        if (!childStatus) {
+            return (
+                <View style={styles.onBoardRow}>
+                    <MaterialIcons name="cancel" size={14} color="#9ca3af" />
+                    <Text style={styles.onBoardText}>Not On Board</Text>
+                </View>
+            );
+        }
+
+        const { attendance } = childStatus;
+        if (attendance && attendance.status === 'boarded') {
+            return (
+                <View>
+                    <View style={styles.onBoardRow}>
+                        <View style={[styles.statusIndicatorDot, { backgroundColor: '#22c55e' }]} />
+                        <Text style={[styles.onBoardText, { color: '#16a34a' }]}>On Board</Text>
+                    </View>
+                    <Text style={styles.boardingTimeSub}>Checked in at {formatTime(attendance.boardingTime)}</Text>
+                </View>
+            );
+        } else if (attendance && (attendance.status === 'dropped_off' || attendance.alightingTime)) {
+            return (
+                <View>
+                    <View style={styles.onBoardRow}>
+                        <View style={[styles.statusIndicatorDot, { backgroundColor: '#3b82f6' }]} />
+                        <Text style={[styles.onBoardText, { color: '#2563eb' }]}>Dropped Off</Text>
+                    </View>
+                    <Text style={styles.boardingTimeSub}>Alighted at {formatTime(attendance.alightingTime)}</Text>
+                </View>
+            );
+        } else {
+            return (
+                <View>
+                    <View style={styles.onBoardRow}>
+                        <View style={[styles.statusIndicatorDot, { backgroundColor: '#9ca3af' }]} />
+                        <Text style={styles.onBoardText}>Not On Board</Text>
+                    </View>
+                    <Text style={styles.boardingTimeSub}>No activity today</Text>
+                </View>
+            );
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -94,11 +216,38 @@ const ParentHome = ({ navigation }) => {
                         <Text style={styles.greeting}>Good afternoon,</Text>
                         <Text style={styles.userName}>{parentName}</Text>
                     </View>
-                    <View style={styles.liveBadge}>
-                        <View style={styles.pulseDot} />
-                        <Text style={styles.liveBadgeText}>Live Tracking</Text>
-                    </View>
+                    {childStatus?.routeInfo?.driverOnline && (
+                        <View style={styles.liveBadge}>
+                            <View style={styles.pulseDot} />
+                            <Text style={styles.liveBadgeText}>Live Tracking</Text>
+                        </View>
+                    )}
                 </View>
+
+                {/* Child Selector */}
+                {students.length > 1 && (
+                    <View style={styles.childSelector}>
+                        {students.map((kid) => {
+                            const isSelected = kid.id === selectedStudentId;
+                            return (
+                                <TouchableOpacity 
+                                    key={kid.id}
+                                    style={[styles.selectorTab, isSelected && styles.selectorTabActive]}
+                                    onPress={() => handleSelectStudent(kid.id)}
+                                >
+                                    <MaterialIcons 
+                                        name="face" 
+                                        size={16} 
+                                        color={isSelected ? Theme.colors.brandGrey : "#9ca3af"} 
+                                    />
+                                    <Text style={[styles.selectorTabText, isSelected && styles.selectorTabActiveText]}>
+                                        {kid.name}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
 
                 {/* Status Cards */}
                 <View style={styles.statusGrid}>
@@ -110,28 +259,45 @@ const ParentHome = ({ navigation }) => {
                             </View>
                         </View>
                         <Text style={styles.cardLabelText}>ESTIMATED ARRIVAL</Text>
-                        <Text style={styles.arrivalValue}>14<Text style={styles.unitText}>min</Text></Text>
+                        <Text style={styles.arrivalValue}>
+                            {childStatus?.routeInfo?.driverOnline ? childStatus.routeInfo.eta || '--' : '--'}
+                            <Text style={styles.unitText}>min</Text>
+                        </Text>
                         <View style={styles.busInfo}>
-                            <View style={styles.busBadge}><Text style={styles.busBadgeText}>Bus #42</Text></View>
-                            <Text style={styles.busSub}>to Home</Text>
+                            <View style={styles.busBadge}>
+                                <Text style={styles.busBadgeText}>
+                                    Bus #{childStatus?.student?.busNumber || 'N/A'}
+                                </Text>
+                            </View>
+                            <Text style={styles.busSub}>
+                                {childStatus?.routeInfo?.driverOnline ? 'En Route' : 'Offline'}
+                            </Text>
                         </View>
                     </View>
 
-                    <TouchableOpacity style={[styles.card, styles.studentCard]}>
+                    <TouchableOpacity 
+                        style={[styles.card, styles.studentCard]}
+                        onPress={() => navigation.navigate('ParentTrackBus', { studentId: selectedStudentId })}
+                    >
                         <View style={styles.studentTop}>
                             <View style={styles.avatar}>
                                 <MaterialIcons name="face" size={32} color="#3b82f6" />
                             </View>
-                            <View style={styles.safeBadge}>
-                                <Text style={styles.safeBadgeText}>SAFE</Text>
+                            <View style={[
+                                styles.safeBadge, 
+                                { backgroundColor: childStatus?.attendance?.status === 'boarded' ? '#dcfce7' : '#f3f4f6' }
+                            ]}>
+                                <Text style={[
+                                    styles.safeBadgeText, 
+                                    { color: childStatus?.attendance?.status === 'boarded' ? '#15803d' : '#6b7280' }
+                                ]}>
+                                    {childStatus?.attendance?.status === 'boarded' ? 'SAFE' : 'PENDING'}
+                                </Text>
                             </View>
                         </View>
                         <View>
-                            <Text style={styles.studentName}>Amna</Text>
-                            <View style={styles.onBoardRow}>
-                                <MaterialIcons name="check-circle" size={14} color="#22c55e" />
-                                <Text style={styles.onBoardText}>On Board</Text>
-                            </View>
+                            <Text style={styles.studentName}>{childStatus?.student?.name || 'Child'}</Text>
+                            {renderCardStatus()}
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -145,14 +311,14 @@ const ParentHome = ({ navigation }) => {
                             title="Live Map View" 
                             subtitle="Track bus location in real-time" 
                             color="#f59e0b"
-                            onPress={() => navigation.navigate('ParentTrackBus')}
+                            onPress={() => navigation.navigate('ParentTrackBus', { studentId: selectedStudentId })}
                         />
                         <QuickAccessItem 
                             icon="calendar-today" 
                             title="Weekly Schedule" 
                             subtitle="View pick-up & drop-off times" 
                             color="#3b82f6"
-                            onPress={() => navigation.navigate('ParentSchedule')}
+                            onPress={() => navigation.navigate('ParentSchedule', { studentId: selectedStudentId })}
                         />
                         <QuickAccessItem 
                             icon="notifications-active" 
@@ -201,11 +367,11 @@ const ParentHome = ({ navigation }) => {
                     <MaterialIcons name="home" size={28} color={Theme.colors.primary} />
                     <Text style={[styles.navText, { color: Theme.colors.primary }]}>Home</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentTrackBus')}>
+                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentTrackBus', { studentId: selectedStudentId })}>
                     <MaterialIcons name="map" size={28} color="#9ca3af" />
                     <Text style={styles.navText}>Map</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentSchedule')}>
+                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentSchedule', { studentId: selectedStudentId })}>
                     <MaterialIcons name="event-note" size={28} color="#9ca3af" />
                     <Text style={styles.navText}>Schedule</Text>
                 </TouchableOpacity>
@@ -239,6 +405,11 @@ const styles = StyleSheet.create({
     liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef3c7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 6 },
     pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' },
     liveBadgeText: { fontSize: 11, fontWeight: 'bold', color: '#92400e' },
+    childSelector: { flexDirection: 'row', gap: 10, marginBottom: 20, backgroundColor: '#f3f4f6', padding: 4, borderRadius: 16 },
+    selectorTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 12, gap: 6 },
+    selectorTabActive: { backgroundColor: 'white', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+    selectorTabText: { fontSize: 13, fontWeight: '700', color: '#6b7280' },
+    selectorTabActiveText: { color: Theme.colors.brandGrey },
     statusGrid: { flexDirection: 'row', gap: 16, marginBottom: 24 },
     card: { flex: 1, height: 176, borderRadius: 24, padding: 20, justifyContent: 'space-between' },
     arrivalCard: { backgroundColor: Theme.colors.primary, shadowColor: Theme.colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15, elevation: 8, position: 'relative', overflow: 'hidden' },
@@ -259,7 +430,9 @@ const styles = StyleSheet.create({
     safeBadgeText: { fontSize: 9, fontWeight: '900', color: '#15803d' },
     studentName: { fontSize: 18, fontWeight: 'bold', color: Theme.colors.brandGrey },
     onBoardRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+    statusIndicatorDot: { width: 8, height: 8, borderRadius: 4 },
     onBoardText: { fontSize: 12, fontWeight: '600', color: '#4b5563' },
+    boardingTimeSub: { fontSize: 10, color: '#9ca3af', marginTop: 2 },
     section: { marginBottom: 24 },
     sectionHeader: { fontSize: 11, fontWeight: '900', color: Theme.colors.brandGrey, letterSpacing: 1, marginBottom: 12 },
     qaList: { backgroundColor: 'white', borderRadius: 24, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' },

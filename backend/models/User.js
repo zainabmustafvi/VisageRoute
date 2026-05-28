@@ -16,6 +16,11 @@ const userSchema = new mongoose.Schema({
         enum: ['admin', 'parent', 'driver'],
         required: true,
     },
+    notificationPreferences: {
+        arrival_notify: { type: Boolean, default: true },
+        start_notify: { type: Boolean, default: true },
+        onboard_notify: { type: Boolean, default: true }
+    }
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

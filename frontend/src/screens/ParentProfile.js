@@ -1,17 +1,49 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Platform
+    View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Platform, RefreshControl, ActivityIndicator
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import Theme from '../theme/Theme';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
 
 const ParentProfile = ({ navigation }) => {
-    
+    const [profile, setProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchProfile = async () => {
+        try {
+            const token = await SecureStore.getItemAsync('socketToken');
+            const res = await axios.get(`${API_BASE_URL}/api/parent/profile`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setProfile(res.data);
+        } catch (error) {
+            console.error('Error fetching parent profile:', error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchProfile();
+    }, []);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchProfile();
+    };
+
     const handleLogout = async () => {
         await SecureStore.deleteItemAsync('userRole');
+        await SecureStore.deleteItemAsync('socketToken');
         navigation.replace('Login');
     };
+
+    const formatValue = (val) => val || "Not provided";
 
     const InfoItem = ({ icon, label, value, color }) => (
         <View style={styles.infoItem}>
@@ -39,6 +71,17 @@ const ParentProfile = ({ navigation }) => {
         </View>
     );
 
+    if (loading && !refreshing) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={Theme.colors.primary} />
+                <Text style={{ marginTop: 10, color: '#6b7280' }}>Loading profile...</Text>
+            </SafeAreaView>
+        );
+    }
+
+    const shortId = profile?.parent?.parentId ? `#P-${profile.parent.parentId.substring(18).toUpperCase()}` : 'N/A';
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
@@ -51,56 +94,62 @@ const ParentProfile = ({ navigation }) => {
                 </View>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                contentContainerStyle={styles.scrollContent}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Theme.colors.primary]} />
+                }
+            >
                 <View style={styles.profileHeader}>
-                    <Text style={styles.userName}>Mrs Safdr</Text>
-                    <Text style={styles.userRole}>Parent Account</Text>
+                    <Text style={styles.userName}>{profile?.parent?.parentName || 'Parent Account'}</Text>
+                    <Text style={styles.userRole}>Parent Portal</Text>
                 </View>
 
                 {/* Parent Information Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>PARENT INFORMATION</Text>
                     <View style={styles.infoCard}>
-                        <InfoItem icon="badge" label="Parent ID" value="#P-8832" color="#6b7280" />
+                        <InfoItem icon="badge" label="Parent ID" value={shortId} color="#6b7280" />
                         <View style={styles.divider} />
-                        <InfoItem icon="call" label="Contact Number" value="0300-1234567" color={Theme.colors.primary} />
+                        <InfoItem icon="call" label="Contact Number" value={formatValue(profile?.parent?.phone)} color={Theme.colors.primary} />
                         <View style={styles.divider} />
-                        <InfoItem icon="mail" label="Email Address" value="mrs.safdr@example.com" color="#3b82f6" />
+                        <InfoItem icon="mail" label="Email Address" value={formatValue(profile?.parent?.parentEmail)} color="#3b82f6" />
                     </View>
                 </View>
 
                 {/* Student Profile Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>STUDENT PROFILE</Text>
-                    <View style={styles.studentCard}>
-                        <View style={styles.gradientOverlay} />
-                        <View style={styles.studentTop}>
-                            <View style={styles.avatarLarge}>
-                                <MaterialIcons name="face" size={40} color="#3b82f6" />
-                            </View>
-                            <View>
-                                <Text style={styles.studentName}>Amna</Text>
-                                <View style={styles.statusBadge}>
-                                    <View style={styles.pulseDot} />
-                                    <Text style={styles.statusBadgeText}>Active Student</Text>
+                    {profile?.children && profile.children.length > 0 ? (
+                        profile.children.map((child, idx) => (
+                            <View key={child.id || idx} style={[styles.studentCard, { marginBottom: 16 }]}>
+                                <View style={styles.gradientOverlay} />
+                                <View style={styles.studentTop}>
+                                    <View style={styles.avatarLarge}>
+                                        <MaterialIcons name="face" size={40} color="#3b82f6" />
+                                    </View>
+                                    <View>
+                                        <Text style={styles.studentName}>{child.name || 'Child'}</Text>
+                                        <View style={styles.statusBadge}>
+                                            <View style={styles.pulseDot} />
+                                            <Text style={styles.statusBadgeText}>Active Student</Text>
+                                        </View>
+                                    </View>
                                 </View>
-                            </View>
-                        </View>
 
-                        <View style={styles.studentGrid}>
-                            <StudentField label="Registration ID" value="SR-2024-042" />
-                            <StudentField label="Grade" value="5th Grade" icon="school" />
-                            <StudentField label="Date of Birth" value="15/03/2018" icon="cake" />
-                            <StudentField label="Assigned Bus" value="Bus #42" icon="directions-bus" badge />
-                            <View style={[styles.studentField, { flexBasis: '100%', marginTop: 15, borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingTop: 15 }]}>
-                                <Text style={styles.fieldLabel}>Major Subject</Text>
-                                <View style={styles.fieldRow}>
-                                    <View style={[styles.colorDot, { backgroundColor: '#a855f7' }]} />
-                                    <Text style={styles.fieldValue}>Computer Science</Text>
+                                <View style={styles.studentGrid}>
+                                    <StudentField label="Registration ID" value={formatValue(child.rollNo)} />
+                                    <StudentField label="Grade" value={formatValue(child.grade)} icon="school" />
+                                    <StudentField label="Assigned Bus" value={child.busNumber ? `Bus #${child.busNumber}` : 'Not Assigned'} icon="directions-bus" badge />
                                 </View>
                             </View>
+                        ))
+                    ) : (
+                        <View style={styles.studentCard}>
+                            <Text style={styles.fieldValue}>No children registered.</Text>
                         </View>
-                    </View>
+                    )}
                 </View>
 
                 {/* Support Section */}
@@ -116,7 +165,7 @@ const ParentProfile = ({ navigation }) => {
                     </View>
                 </View>
 
-                <Text style={styles.versionText}>SafeRoute App v2.4.0 (Build 2024)</Text>
+                <Text style={styles.versionText}>VisageRoute App v1.0.0 (Build 2026)</Text>
             </ScrollView>
 
             {/* Bottom Nav Placeholder */}
@@ -134,7 +183,7 @@ const ParentProfile = ({ navigation }) => {
                     <Text style={styles.navText}>Schedule</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('ParentAnnouncements')}>
-                    <MaterialIcons name="feedback" size={28} color="#9ca3af" />
+                    <MaterialIcons name="notifications" size={28} color="#9ca3af" />
                     <Text style={styles.navText}>Alerts</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navItem}>
@@ -173,9 +222,6 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: Theme.colors.brandGrey,
-    },
-    settingsBtn: {
-        padding: 5,
     },
     scrollContent: {
         padding: 24,
@@ -344,12 +390,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: 'bold',
         color: '#92400e',
-    },
-    colorDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        marginRight: 8,
     },
     supportCard: {
         backgroundColor: 'white',
