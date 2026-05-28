@@ -1,5 +1,7 @@
 Bus Number,Trip Name,Route,Pickup Time,Drop Time,Days of Week
-ax. 256,Morning Shift,Route A,07:30 AM,08:30 AM,"1,2,3,4,5"
-ax. 256,Afternoon Return,Route A,02:00 PM,03:00 PM,"1,2,3,4,5"
+256,Morning Shift,Route A,07:30 AM,08:30 AM,"1,2,3,4,5"
+256,Afternoon Return,Route A,02:00 PM,03:00 PM,"1,2,3,4,5"
 102,Staff Shuttle,Route B,08:00 AM,09:00 AM,"1,2,3,4,5"
+102,Afternoon Return,Route B,02:30 PM,03:30 PM,"1,2,3,4,5"
 105,Late Evening,Route C,06:30 PM,07:30 PM,"1,2,3,4,5"
+105,Morning Shift,Route C,07:00 AM,08:00 AM,"1,2,3,4,5"
