@@ -28,6 +28,18 @@
     "plugins": [
       "expo-font",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow VisageRoute to use the camera for face attendance verification."
+        }
+      ],
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "VisageRoute needs camera access to scan faces for attendance."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow VisageRoute to use your location to track bus routes.",
@@ -36,6 +48,9 @@
       ],
       "expo-secure-store",
       "expo-sharing"
+    ],
+    "assets": [
+      "./assets/mobilefacenet.tflite"
     ]
   }
 }
