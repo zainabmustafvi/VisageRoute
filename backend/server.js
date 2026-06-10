@@ -71,3 +71,6 @@ mongoose.connect(MONGO_URI)
     server.listen(PORT, () => console.log(`Server and Socket.io running securely on port ${PORT}`));
   })
   .catch((error) => console.error('MongoDB connection error:', error));
+
+// Trigger nodemon restart after .env file update for standard MongoDB URI format
+

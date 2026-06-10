@@ -19,6 +19,8 @@ const ParentHome = ({ navigation }) => {
     const [selectedStudentId, setSelectedStudentId] = useState(null);
     const [childStatus, setChildStatus] = useState(null);
     const socketRef = useRef(null);
+    // Ref mirrors selectedStudentId so socket callback always reads the latest value
+    const selectedStudentIdRef = useRef(null);
 
     const fetchData = async (targetStudentId = null) => {
         try {
@@ -44,7 +46,10 @@ const ParentHome = ({ navigation }) => {
             // Fetch Child Status
             const activeId = targetStudentId || selectedStudentId || children[0]?.id;
             if (activeId) {
-                if (!selectedStudentId) setSelectedStudentId(activeId);
+                if (!selectedStudentId) {
+                    setSelectedStudentId(activeId);
+                    selectedStudentIdRef.current = activeId;
+                }
                 const statusRes = await axios.get(`${API_BASE_URL}/api/parent/child-status?studentId=${activeId}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -81,11 +86,26 @@ const ParentHome = ({ navigation }) => {
                 console.log('[Parent Home Socket] Connected');
             });
 
-            // Listen for attendance updates
+            // Listen for attendance updates — use ref to avoid stale closure
             socket.on('attendanceUpdate', (data) => {
-                // If it relates to our active child, refresh status
-                if (data.studentId === selectedStudentId) {
-                    fetchData(selectedStudentId);
+                const activeId = selectedStudentIdRef.current;
+                const matchesChild =
+                    !data.studentId ||
+                    !activeId ||
+                    data.studentId === activeId ||
+                    data.studentId === activeId?.toString();
+
+                console.log('[ParentHome Socket] attendanceUpdate received:', data);
+
+                if (matchesChild) {
+                    setChildStatus(prev => ({
+                        ...prev,
+                        attendance: {
+                            status: data.status || 'boarded',
+                            boardingTime: data.boardingTime || data.time,
+                            alightingTime: null,
+                        },
+                    }));
                 }
             });
 
@@ -112,6 +132,7 @@ const ParentHome = ({ navigation }) => {
 
     const handleSelectStudent = (id) => {
         setSelectedStudentId(id);
+        selectedStudentIdRef.current = id;
         setIsLoading(true);
         fetchData(id);
     };

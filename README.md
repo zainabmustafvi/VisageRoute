@@ -101,7 +101,7 @@ Backend queries MongoDB: cosine similarity vs stored embeddings
        ↓
 Match found → log attendance + send FCM to parent
 ```
-
+![face recognition flow](image.png)
 ---
 
 ## Real-Time GPS Flow (Socket.io)

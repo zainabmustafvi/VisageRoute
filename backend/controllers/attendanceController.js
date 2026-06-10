@@ -1,7 +1,9 @@
 const Student = require('../models/Student');
 const Attendance = require('../models/Attendance');
-const { compareEmbeddings, extractFaceEmbedding } = require('../utils/faceService');
+const { cosineSimilarity, extractFaceEmbedding } = require('../utils/faceService');
 const { getIo } = require('../config/socket');
+
+const getTodayString = () => new Date().toISOString().split('T')[0];
 
 // @desc    Get all students assigned to a specific bus
 // @route   GET /api/attendance/students/:busId
@@ -10,11 +12,10 @@ const getStudentsByBus = async (req, res) => {
     try {
         const { busId } = req.params;
         const students = await Student.find({ busId }).select('name parentId faceEmbedding');
-        
-        // Return students with basic info and attendance status for today
-        const today = new Date().toISOString().split('T')[0];
+
+        const today = getTodayString();
         const attendances = await Attendance.find({ busId, date: today });
-        
+
         const studentsWithStatus = students.map(student => {
             const att = attendances.find(a => a.studentId.toString() === student._id.toString());
             return {
@@ -22,7 +23,7 @@ const getStudentsByBus = async (req, res) => {
                 name: student.name,
                 parentId: student.parentId,
                 hasBoarded: !!att,
-                boardingTime: att ? att.boardingTime : null
+                boardingTime: att ? att.boardingTime : null,
             };
         });
 
@@ -43,77 +44,87 @@ const verifyAttendance = async (req, res) => {
             return res.status(400).json({ error: 'Missing bus_id or driver_id' });
         }
 
-        // 1. Get current embedding (either from request or by processing image)
-        let currentEmbedding = embedding;
+        const useClientEmbedding = Array.isArray(embedding) && embedding.length === 128;
+
+        let currentEmbedding = useClientEmbedding ? embedding : null;
         if (!currentEmbedding && imageBase64) {
             currentEmbedding = await extractFaceEmbedding(imageBase64);
         }
 
-        if (!currentEmbedding) {
+        if (!currentEmbedding || currentEmbedding.length !== 128) {
             return res.status(400).json({ error: 'No face detected or embedding provided' });
         }
 
-        // 2. Fetch all students on this bus who haven't boarded today
-        const today = new Date().toISOString().split('T')[0];
+        const today = getTodayString();
         const students = await Student.find({ busId: bus_id }).select('name faceEmbedding parentId');
-        const loggedAttendances = await Attendance.find({ busId: bus_id, date: today }).select('studentId');
-        const loggedIds = loggedAttendances.map(a => a.studentId.toString());
 
         let matchFound = null;
-        let minDistance = 1.0;
+        let bestScore = 0;
 
         for (const student of students) {
-            if (loggedIds.includes(student._id.toString())) continue;
             if (!student.faceEmbedding || student.faceEmbedding.length === 0) continue;
-
-            const distance = compareEmbeddings(currentEmbedding, student.faceEmbedding);
-            if (distance < 0.5) { // Strict threshold for safety
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    matchFound = student;
-                }
+            const score = cosineSimilarity(currentEmbedding, student.faceEmbedding);
+            if (score > bestScore) {
+                bestScore = score;
+                matchFound = student;
             }
         }
 
-        if (!matchFound) {
-            return res.status(404).json({ error: 'Identity not found' });
+        if (bestScore < 0.6 || !matchFound) {
+            return res.status(404).json({ message: 'Face not recognized' });
         }
 
-        // 3. Log Attendance
-        const newAttendance = new Attendance({
+        const existing = await Attendance.findOne({
+            studentId: matchFound._id,
+            date: today,
+        });
+
+        if (existing) {
+            return res.status(409).json({
+                message: 'Attendance already marked today',
+                student: {
+                    _id: matchFound._id,
+                    name: matchFound.name,
+                    boardingTime: existing.boardingTime,
+                },
+            });
+        }
+
+        const boardingTime = new Date();
+        const newAttendance = await Attendance.create({
             studentId: matchFound._id,
             busId: bus_id,
             driverId: driver_id,
             date: today,
-            boardingTime: new Date(),
+            boardingTime,
             status: 'boarded',
-            verificationMethod: 'face'
+            verificationMethod: 'face',
         });
 
-        await newAttendance.save();
-
-        // 4. Notify Parent via Socket.io
         try {
             const io = getIo();
             io.to(matchFound.parentId.toString()).emit('attendanceUpdate', {
+                studentId: matchFound._id.toString(),
                 studentName: matchFound.name,
                 status: 'boarded',
-                time: newAttendance.boardingTime,
-                message: `Your child ${matchFound.name} has safely boarded the bus.`
+                boardingTime: newAttendance.boardingTime,
+                busId: bus_id,
+                message: `Your child ${matchFound.name} has safely boarded the bus.`,
             });
         } catch (socketErr) {
             console.error('Socket notification failed:', socketErr.message);
         }
 
-        res.json({
-            message: `Attendance Logged - ${matchFound.name} confirmed`,
+        res.status(200).json({
+            message: 'Attendance marked',
+            studentName: matchFound.name,
+            boardingTime: newAttendance.boardingTime,
             student: {
                 _id: matchFound._id,
                 name: matchFound.name,
-                boardingTime: newAttendance.boardingTime
-            }
+                boardingTime: newAttendance.boardingTime,
+            },
         });
-
     } catch (err) {
         console.error('Attendance Verification Error:', err);
         res.status(500).json({ error: 'Server Error verifying attendance' });
@@ -122,5 +133,5 @@ const verifyAttendance = async (req, res) => {
 
 module.exports = {
     getStudentsByBus,
-    verifyAttendance
+    verifyAttendance,
 };
