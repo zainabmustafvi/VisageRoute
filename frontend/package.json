@@ -44,5 +44,9 @@
     "vision-camera-face-detector": "^0.1.8",
     "vision-camera-resize-plugin": "^2.1.1"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@babel/plugin-proposal-optional-chaining": "^7.21.0",
+    "@babel/plugin-transform-optional-chaining": "^7.29.7"
+  }
 }
