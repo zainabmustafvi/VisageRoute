@@ -1,12 +1,14 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const LocationTracking = require('../models/LocationTracking');
+const BusRouteAssignment = require('../models/BusRouteAssignment');
+const BusRoute = require('../models/BusRoute');
 
 let io;
 
-// Haversine formula — calculates straight-line distance (km) between two GPS points
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Earth radius in km
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) ** 2 +
@@ -15,8 +17,35 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// School/destination coordinates (update to real coordinates)
-const SCHOOL_LOCATION = { lat: 24.8607, lng: 67.0011 }; // Example: Karachi
+const calculateETA = async (busId, currentLat, currentLng) => {
+    try {
+        const assignment = await BusRouteAssignment.findOne({ busId, isActive: true });
+        if (!assignment) return null;
+
+        const route = await BusRoute.findById(assignment.routeId);
+        if (!route || !route.stops || route.stops.length === 0) return null;
+
+        let minDist = Infinity;
+        let nextStop = null;
+        for (const stop of route.stops) {
+            if (!stop.coordinates || !stop.coordinates.latitude || !stop.coordinates.longitude) continue;
+            const dist = haversineDistance(currentLat, currentLng, stop.coordinates.latitude, stop.coordinates.longitude);
+            if (dist < minDist) {
+                minDist = dist;
+                nextStop = stop;
+            }
+        }
+
+        if (!nextStop) return null;
+
+        const avgSpeedKmH = 30;
+        const etaMinutes = Math.round((minDist / avgSpeedKmH) * 60);
+        return etaMinutes;
+    } catch (err) {
+        console.error('ETA Calculation Error:', err);
+        return null;
+    }
+};
 
 const initSocket = (server) => {
     io = new Server(server, {
@@ -26,7 +55,6 @@ const initSocket = (server) => {
         }
     });
 
-    // Security: JWT verification on every socket handshake
     io.use(async (socket, next) => {
         try {
             const token = socket.handshake.auth.token;
@@ -50,11 +78,9 @@ const initSocket = (server) => {
         const { _id, role } = socket.user;
         console.log(`[Socket.io] Connected: ID=${socket.id} | UserID=${_id} | Role=${role}`);
 
-        // Join private room for targeted notifications
         socket.join(_id.toString());
 
-        // ── JOIN ROUTE ROOM ──────────────────────────────────────────────────
-        // Both drivers and parents call this to subscribe to a route's updates
+        // ── JOIN ROUTE ROOM (legacy) ─────────────────────────────────────────
         socket.on('joinRouteRoom', (routeId) => {
             const room = `route_${routeId}`;
             socket.join(room);
@@ -62,37 +88,108 @@ const initSocket = (server) => {
             console.log(`[Socket.io] ${role} ${_id} joined room: ${room}`);
         });
 
-        // ── DRIVER: EMIT LOCATION ────────────────────────────────────────────
-        // Only drivers can broadcast location updates
+        // ── DRIVER: JOIN BUS ROOM ────────────────────────────────────────────
+        socket.on('join_bus_room', ({ busID }) => {
+            if (role !== 'driver') return;
+            const room = `bus_${busID}`;
+            socket.join(room);
+            socket.busRoom = room;
+            socket.busID = busID;
+            console.log(`[Socket.io] Driver joined bus room: ${room}`);
+        });
+
+        // ── PARENT: SUBSCRIBE TO BUS ─────────────────────────────────────────
+        socket.on('subscribe_bus', ({ busID }) => {
+            const room = `bus_${busID}`;
+            socket.join(room);
+            socket.busRoom = room;
+            socket.busID = busID;
+            console.log(`[Socket.io] Parent subscribed to bus room: ${room}`);
+        });
+
+        // ── DRIVER: EMIT BUS LOCATION UPDATE ─────────────────────────────────
+        socket.on('bus_location_update', async (data) => {
+            if (role !== 'driver') {
+                socket.emit('error', { message: 'Unauthorized: Only drivers can emit location.' });
+                return;
+            }
+
+            const { busID, latitude, longitude, speed, timestamp } = data;
+
+            // 1. Save to MongoDB
+            try {
+                const driver = await User.findById(_id);
+                const driverDoc = require('../models/Driver');
+                const driverRecord = await driverDoc.findOne({ userId: _id });
+
+                if (driverRecord) {
+                    await LocationTracking.create({
+                        busId: busID,
+                        driverId: driverRecord._id,
+                        latitude,
+                        longitude,
+                        speed: speed || 0,
+                        timestamp: timestamp ? new Date(timestamp) : new Date()
+                    });
+                }
+            } catch (err) {
+                console.error('[Socket.io] Error saving location:', err.message);
+            }
+
+            // 2. Calculate ETA using route stops
+            const eta = await calculateETA(busID, latitude, longitude);
+
+            // 3. Broadcast to all parents in this bus room
+            const room = `bus_${busID}`;
+            io.to(room).emit('bus_location_update', {
+                busID,
+                latitude,
+                longitude,
+                speed: speed || 0,
+                timestamp: timestamp || new Date().toISOString(),
+                eta
+            });
+
+            // Also broadcast to legacy route room if driver has one
+            if (socket.currentRoom) {
+                io.to(socket.currentRoom).emit('locationUpdate', {
+                    driverLocation: { lat: latitude, lng: longitude },
+                    eta,
+                    timestamp: timestamp || new Date().toISOString(),
+                });
+            }
+        });
+
+        // ── DRIVER: END TRIP ─────────────────────────────────────────────────
+        socket.on('trip_ended', ({ busID }) => {
+            if (role !== 'driver') return;
+            const room = `bus_${busID}`;
+            io.to(room).emit('trip_ended', { busID });
+            console.log(`[Socket.io] Trip ended for bus: ${busID}`);
+        });
+
+        // ── DRIVER: EMIT LOCATION (legacy) ───────────────────────────────────
         socket.on('updateLocation', ({ lat, lng, routeId }) => {
-            // Security: Only allow drivers to emit location events
             if (role !== 'driver') {
                 socket.emit('error', { message: 'Unauthorized: Only drivers can emit location.' });
                 return;
             }
 
             const room = `route_${routeId}`;
-
-            // Calculate rough ETA to school (avg bus speed ~30 km/h)
-            const distanceKm = haversineDistance(lat, lng, SCHOOL_LOCATION.lat, SCHOOL_LOCATION.lng);
+            const distanceKm = haversineDistance(lat, lng, 24.8607, 67.0011);
             const etaMinutes = Math.round((distanceKm / 30) * 60);
 
-            // Broadcast to all users in this route's room (driver + parents)
             io.to(room).emit('locationUpdate', {
                 driverLocation: { lat, lng },
                 eta: etaMinutes,
                 timestamp: new Date().toISOString(),
             });
-
-            console.log(`[Socket.io] Route ${routeId} update: (${lat.toFixed(4)}, ${lng.toFixed(4)}) | ETA: ${etaMinutes} min`);
         });
 
-        // ── DRIVER: END TRIP ─────────────────────────────────────────────────
         socket.on('endTrip', ({ routeId }) => {
             if (role !== 'driver') return;
             const room = `route_${routeId}`;
             io.to(room).emit('tripEnded', { message: 'The bus has arrived. Trip complete.' });
-            console.log(`[Socket.io] Trip ended for route: ${routeId}`);
         });
 
         socket.on('disconnect', () => {

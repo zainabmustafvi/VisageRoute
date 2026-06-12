@@ -34,9 +34,8 @@ const DriverHome = ({ navigation }) => {
     const [updateInterval, setUpdateInterval] = useState(10000); // 10 seconds default
 
     const socketRef = useRef(null);
-    const locationWatcherRef = useRef(null);
+    const locationSubscriptionRef = useRef(null);
     const pan = useRef(new Animated.Value(0)).current;
-    const trackingIntervalRef = useRef(null);
 
     const handleLogout = async () => {
         if (tripActive) await stopTrip();
@@ -88,6 +87,11 @@ const DriverHome = ({ navigation }) => {
 
         socket.on('connect', () => {
             console.log('[Driver Socket] Connected:', socket.id);
+            // Join bus room for real-time tracking
+            if (driverData.assignedBusId) {
+                socket.emit('join_bus_room', { busID: driverData.assignedBusId });
+            }
+            // Also join legacy route room for backward compatibility
             socket.emit('joinRouteRoom', driverData.routeId || DRIVER_ROUTE_ID_DEFAULT);
             setConnecting(false);
         });
@@ -112,30 +116,26 @@ const DriverHome = ({ navigation }) => {
         await updateTripStatusOnServer(true);
         setTripActive(true);
 
-        // Toast: You started location sharing
         Alert.alert("Status", "You started location sharing");
 
-        // Request Location
-        const locationService = await Location.getCurrentPositionAsync({});
-        setCurrentLocation({
-            lat: locationService.coords.latitude,
-            lng: locationService.coords.longitude
-        });
-
-        // Start GPS tracking every 10 seconds (or 30 if battery low)
-        startTracking();
+        // Start continuous GPS tracking with watchPositionAsync
+        startGPSTracking();
     };
 
-    const startTracking = () => {
-        if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
+    const startGPSTracking = async () => {
+        // Remove any existing subscription
+        if (locationSubscriptionRef.current) {
+            locationSubscriptionRef.current.remove();
+        }
 
-        trackingIntervalRef.current = setInterval(async () => {
-            try {
-                const loc = await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Balanced
-                });
-
-                const { latitude, longitude, speed, accuracy } = loc.coords;
+        const subscription = await Location.watchPositionAsync(
+            {
+                accuracy: Location.Accuracy.High,
+                timeInterval: 10000,
+                distanceInterval: 10,
+            },
+            (location) => {
+                const { latitude, longitude, speed, accuracy } = location.coords;
                 const timestamp = new Date().toISOString();
 
                 if (!driverData.assignedBusId) {
@@ -154,26 +154,23 @@ const DriverHome = ({ navigation }) => {
 
                 setCurrentLocation({ lat: latitude, lng: longitude });
 
-                // Check connectivity
-                if (isOnline) {
-                    await sendLocationToBackend(locationData);
-                    // Also broadcast via socket
-                    if (socketRef.current?.connected) {
-                        socketRef.current.emit('updateLocation', {
-                            lat: latitude,
-                            lng: longitude,
-                            routeId: driverData.routeId || DRIVER_ROUTE_ID_DEFAULT,
-                        });
-                    }
-                } else {
-                    // Cache locally
-                    await cacheLocation(locationData);
+                // Emit via socket to parents in bus room
+                if (socketRef.current?.connected) {
+                    socketRef.current.emit('bus_location_update', {
+                        busID: driverData.assignedBusId,
+                        latitude,
+                        longitude,
+                        speed: speed || 0,
+                        timestamp,
+                    });
                 }
 
-            } catch (error) {
-                console.error("Tracking Error:", error);
+                // Also save to backend via HTTP
+                sendLocationToBackend(locationData);
             }
-        }, updateInterval);
+        );
+
+        locationSubscriptionRef.current = subscription;
     };
 
     const sendLocationToBackend = async (data) => {
@@ -220,16 +217,14 @@ const DriverHome = ({ navigation }) => {
     };
 
     const stopTrip = async () => {
-        if (trackingIntervalRef.current) {
-            clearInterval(trackingIntervalRef.current);
-            trackingIntervalRef.current = null;
+        // Stop GPS tracking
+        if (locationSubscriptionRef.current) {
+            locationSubscriptionRef.current.remove();
+            locationSubscriptionRef.current = null;
         }
-        if (locationWatcherRef.current) {
-            locationWatcherRef.current.remove();
-            locationWatcherRef.current = null;
-        }
+        // Disconnect socket and emit trip ended
         if (socketRef.current?.connected) {
-            socketRef.current.emit('endTrip', { routeId: driverData.routeId || DRIVER_ROUTE_ID_DEFAULT });
+            socketRef.current.emit('trip_ended', { busID: driverData.assignedBusId });
             socketRef.current.disconnect();
             socketRef.current = null;
         }
@@ -277,9 +272,9 @@ const DriverHome = ({ navigation }) => {
         const batteryListener = Battery.addBatteryLevelListener(({ batteryLevel }) => {
             setBatteryLevel(batteryLevel);
             if (batteryLevel < 0.2) {
-                setUpdateInterval(30000); // 30 seconds
+                setUpdateInterval(30000);
             } else {
-                setUpdateInterval(10000); // 10 seconds
+                setUpdateInterval(10000);
             }
         });
 
@@ -292,8 +287,9 @@ const DriverHome = ({ navigation }) => {
         });
 
         return () => {
-            if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
-            if (locationWatcherRef.current) locationWatcherRef.current.remove();
+            if (locationSubscriptionRef.current) {
+                locationSubscriptionRef.current.remove();
+            }
             if (socketRef.current) socketRef.current.disconnect();
             batteryListener.remove();
             unsubscribe();
@@ -301,8 +297,10 @@ const DriverHome = ({ navigation }) => {
     }, []);
 
     useEffect(() => {
-        if (tripActive) startTracking();
-    }, [updateInterval]);
+        if (tripActive && driverData.assignedBusId) {
+            startGPSTracking();
+        }
+    }, [tripActive, driverData.assignedBusId]);
 
     const translateX = pan.interpolate({
         inputRange: [0, SWIPE_RANGE],

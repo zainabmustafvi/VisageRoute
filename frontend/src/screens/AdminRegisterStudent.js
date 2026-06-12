@@ -298,8 +298,9 @@ const AdminRegisterStudent = ({ navigation, route }) => {
                                     />
                                 </TouchableOpacity>
                                 <View style={styles.infoTextContainer}>
-                                    <Text style={styles.infoTitle}>Send Login ID & Password</Text>
-                                    <Text style={styles.infoSubtitle}>Credentials will be sent to the parent's email upon registration.</Text>
+                                    <Text style={styles.infoTitle}>Send Login Credentials</Text>
+                                    <Text style={styles.infoSubtitle}>Parent login email: {parentEmail || '[email entered above]'}</Text>
+                                    <Text style={styles.infoSubtitle}>Credentials will be sent to parent's email upon registration.</Text>
                                 </View>
                             </View>
                         )}

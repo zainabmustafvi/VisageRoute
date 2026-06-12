@@ -165,12 +165,35 @@ const getChildStatus = async (req, res) => {
 
         // Calculate location/ETA if driver online
         let eta = null;
+        let latestLocation = null;
         if (driverOnline && student.busId) {
             const LocationTracking = require('../models/LocationTracking');
-            const latestLoc = await LocationTracking.findOne({ busId: student.busId._id }).sort({ timestamp: -1 });
-            if (latestLoc) {
-                // Return a dynamic ETA based on tracking or a fallback of 15 min
-                eta = 15;
+            latestLocation = await LocationTracking.findOne({ busId: student.busId._id }).sort({ timestamp: -1 });
+            if (latestLocation) {
+                // Calculate ETA from latest location using route stops
+                const BusRoute = require('../models/BusRoute');
+                const route = await BusRoute.findById(assignment?.routeId);
+                if (route && route.stops && route.stops.length > 0) {
+                    const R = 6371;
+                    let minDist = Infinity;
+                    for (const stop of route.stops) {
+                        if (!stop.coordinates || !stop.coordinates.latitude || !stop.coordinates.longitude) continue;
+                        const dLat = (stop.coordinates.latitude - latestLocation.latitude) * Math.PI / 180;
+                        const dLon = (stop.coordinates.longitude - latestLocation.longitude) * Math.PI / 180;
+                        const a = Math.sin(dLat / 2) ** 2 +
+                            Math.cos(latestLocation.latitude * Math.PI / 180) *
+                            Math.cos(stop.coordinates.latitude * Math.PI / 180) *
+                            Math.sin(dLon / 2) ** 2;
+                        const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                        if (dist < minDist) minDist = dist;
+                    }
+                    if (minDist < Infinity) {
+                        eta = Math.round((minDist / 30) * 60);
+                    }
+                } else {
+                    // Fallback: estimate 15 min if no route stops with coordinates
+                    eta = 15;
+                }
             }
         }
 
@@ -196,7 +219,12 @@ const getChildStatus = async (req, res) => {
                 wentOnlineAt,
                 routeActive,
                 routeId,
-                eta
+                eta,
+                latestLocation: latestLocation ? {
+                    latitude: latestLocation.latitude,
+                    longitude: latestLocation.longitude,
+                    timestamp: latestLocation.timestamp
+                } : null
             }
         });
 
