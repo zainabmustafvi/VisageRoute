@@ -3,7 +3,7 @@ const router = express.Router();
 
 const { protect } = require('../middleware/authMiddleware');
 const { authorizeRoles } = require('../middleware/roleMiddleware');
-const { getAssignedRoute, getDashboardData, updateTripStatus, getProfile } = require('../controllers/driverController');
+const { getAssignedRoute, getDashboardData, updateTripStatus, getProfile, startTrip, stopTrip } = require('../controllers/driverController');
 
 // All driver routes must be protected and restricted to the 'driver' role
 router.use(protect);
@@ -20,5 +20,9 @@ router.get('/profile', getProfile);
 
 // Update trip status (Online/Offline)
 router.patch('/trip-status', updateTripStatus);
+
+// Start / Stop Trip
+router.patch('/start-trip', startTrip);
+router.patch('/stop-trip', stopTrip);
 
 module.exports = router;

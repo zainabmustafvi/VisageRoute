@@ -6,6 +6,8 @@ const BusRouteAssignment = require('../models/BusRouteAssignment');
 const BusRoute = require('../models/BusRoute');
 
 let io;
+const sentArrivalNotifications = new Set();
+setInterval(() => sentArrivalNotifications.clear(), 24 * 60 * 60 * 1000);
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371;
@@ -157,6 +159,51 @@ const initSocket = (server) => {
                     eta,
                     timestamp: timestamp || new Date().toISOString(),
                 });
+            }
+
+            // 4. CHECK ARRIVAL THRESHOLD for each parent on this bus
+            if (eta !== null && eta <= 5) {
+                try {
+                    const Student = require('../models/Student');
+                    const Bus = require('../models/Bus');
+                    const { sendNotification } = require('../services/fcmService');
+
+                    const students = await Student.find({ 
+                        busId: busID
+                    }).populate({
+                        path: 'parentId',
+                        model: 'User',
+                        select: 'fcmToken notificationPreferences'
+                    });
+
+                    const bus = await Bus.findById(busID).select('busNumber');
+
+                    if (bus) {
+                        for (const student of students) {
+                            const parent = student.parentId;
+                            if (!parent?.fcmToken) continue;
+                            if (parent.notificationPreferences?.arrival_notify === false) continue;
+
+                            // Prevent duplicate arrival notifications
+                            const notifKey = `arrival_${busID}_${parent._id}_${new Date().toDateString()}`;
+                            if (sentArrivalNotifications.has(notifKey)) continue;
+                            sentArrivalNotifications.add(notifKey);
+
+                            await sendNotification(
+                                parent.fcmToken,
+                                '📍 Bus Arriving Soon',
+                                `Bus #${bus.busNumber} is arriving at your pickup point in ~${eta} minutes.`,
+                                { 
+                                    type: 'bus_arriving',
+                                    busID: busID.toString(),
+                                    etaMinutes: eta.toString()
+                                }
+                            );
+                        }
+                    }
+                } catch (arrErr) {
+                    console.error('[Socket.io] ETA check notification failed:', arrErr.message);
+                }
             }
         });
 

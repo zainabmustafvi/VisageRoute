@@ -10,7 +10,8 @@ const {
     getParentProfile,
     getPreferences,
     updatePreferences,
-    markAllAnnouncementsRead
+    markAllAnnouncementsRead,
+    updateFcmToken
 } = require('../controllers/parentController');
 
 router.use(protect);
@@ -24,5 +25,6 @@ router.get('/child-status', getChildStatus);
 router.get('/profile', getParentProfile);
 router.get('/preferences', getPreferences);
 router.patch('/preferences', updatePreferences);
+router.patch('/fcm-token', updateFcmToken);
 
 module.exports = router;

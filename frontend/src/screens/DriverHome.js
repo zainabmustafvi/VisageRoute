@@ -63,7 +63,11 @@ const DriverHome = ({ navigation }) => {
     const updateTripStatusOnServer = async (isOnline) => {
         try {
             const token = await SecureStore.getItemAsync('socketToken');
-            await axios.patch(`${API_BASE_URL}/api/driver/trip-status`, { isOnline }, {
+            const endpoint = isOnline ? 'start-trip' : 'stop-trip';
+            await axios.patch(`${API_BASE_URL}/api/driver/${endpoint}`, {
+                busID: driverData.assignedBusId,
+                driverID: driverData.driverId
+            }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
         } catch (error) {

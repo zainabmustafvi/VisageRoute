@@ -67,7 +67,8 @@ const getDashboardData = async (req, res) => {
             busNumber: driver.assignedBusId ? driver.assignedBusId.busNumber : 'N/A',
             isOnline: driver.isOnline,
             assignedBusId: driver.assignedBusId ? driver.assignedBusId._id : null,
-            routeId: assignment ? assignment.routeId : null
+            routeId: assignment ? assignment.routeId : null,
+            driverId: driver._id
         });
     } catch (err) {
         console.error("Dashboard Data Error:", err);
@@ -130,9 +131,167 @@ const getProfile = async (req, res) => {
     }
 };
 
+// @desc    Start trip and notify parents
+// @route   PATCH /api/driver/start-trip
+// @access  Private/Driver
+const startTrip = async (req, res) => {
+    try {
+        let { busID, driverID } = req.body;
+
+        // Fallback: extract from token if body is missing it
+        if (!driverID || !busID) {
+            const driver = await Driver.findOne({ userId: req.user.userId });
+            if (driver) {
+                driverID = driverID || driver._id;
+                busID = busID || driver.assignedBusId;
+            }
+        }
+
+        if (!driverID || !busID) {
+            return res.status(400).json({ error: 'Driver profile or assigned bus not found.' });
+        }
+
+        // 1. Update driver status ONLINE
+        await Driver.findByIdAndUpdate(driverID, { isOnline: true, wentOnlineAt: new Date() });
+
+        // 2. Find ALL students on this bus
+        const Student = require('../models/Student');
+        const students = await Student.find({ 
+            busId: busID
+        }).populate({
+            path: 'parentId',
+            model: 'User',
+            select: 'fcmToken notificationPreferences'
+        });
+
+        // 3. Get bus number for message
+        const Bus = require('../models/Bus');
+        const bus = await Bus.findById(busID).select('busNumber');
+
+        if (!bus) {
+            return res.status(404).json({ error: 'Bus not found.' });
+        }
+
+        // 4. Send FCM to each parent (check preference first)
+        const { sendNotification } = require('../services/fcmService');
+        const notifications = students.map(student => {
+            const parent = student.parentId;
+            if (!parent?.fcmToken) return null;
+            if (parent.notificationPreferences?.start_notify === false) return null;
+
+            return sendNotification(
+                parent.fcmToken,
+                '🚌 Bus Route Started',
+                `Bus #${bus.busNumber} has left the station and is on its way.`,
+                { type: 'trip_started', busID: busID.toString() }
+            );
+        }).filter(Boolean);
+
+        await Promise.allSettled(notifications);
+
+        // 5. Also emit Socket.io to parent rooms
+        try {
+            const { getIo } = require('../config/socket');
+            const io = getIo();
+            io.to(`bus_${busID}`).emit('trip_started', {
+                busID,
+                busNumber: bus.busNumber,
+                message: 'Bus has started the route'
+            });
+        } catch (socketErr) {
+            console.error('[Socket.io] trip_started emit error:', socketErr.message);
+        }
+
+        res.status(200).json({ message: 'Trip started, parents notified', isOnline: true });
+    } catch (err) {
+        console.error('Error starting trip:', err);
+        res.status(500).json({ error: 'Server Error starting trip' });
+    }
+};
+
+// @desc    Stop trip and notify parents
+// @route   PATCH /api/driver/stop-trip
+// @access  Private/Driver
+const stopTrip = async (req, res) => {
+    try {
+        let { busID, driverID } = req.body;
+
+        // Fallback: extract from token if body is missing it
+        if (!driverID || !busID) {
+            const driver = await Driver.findOne({ userId: req.user.userId });
+            if (driver) {
+                driverID = driverID || driver._id;
+                busID = busID || driver.assignedBusId;
+            }
+        }
+
+        if (!driverID || !busID) {
+            return res.status(400).json({ error: 'Driver profile or assigned bus not found.' });
+        }
+
+        // 1. Update driver status OFFLINE
+        await Driver.findByIdAndUpdate(driverID, { isOnline: false });
+
+        // 2. Find ALL students on this bus
+        const Student = require('../models/Student');
+        const students = await Student.find({ 
+            busId: busID
+        }).populate({
+            path: 'parentId',
+            model: 'User',
+            select: 'fcmToken notificationPreferences'
+        });
+
+        // 3. Get bus number for message
+        const Bus = require('../models/Bus');
+        const bus = await Bus.findById(busID).select('busNumber');
+
+        if (!bus) {
+            return res.status(404).json({ error: 'Bus not found.' });
+        }
+
+        // 4. Send FCM to each parent (check preference first)
+        const { sendNotification } = require('../services/fcmService');
+        const notifications = students.map(student => {
+            const parent = student.parentId;
+            if (!parent?.fcmToken) return null;
+            if (parent.notificationPreferences?.start_notify === false) return null;
+
+            return sendNotification(
+                parent.fcmToken,
+                '🚌 Bus Route Ended',
+                `Bus #${bus.busNumber} has completed its route and is offline.`,
+                { type: 'trip_ended', busID: busID.toString() }
+            );
+        }).filter(Boolean);
+
+        await Promise.allSettled(notifications);
+
+        // 5. Also emit Socket.io to parent rooms
+        try {
+            const { getIo } = require('../config/socket');
+            const io = getIo();
+            io.to(`bus_${busID}`).emit('trip_ended', {
+                busID,
+                busNumber: bus.busNumber,
+                message: 'Bus has ended the route'
+            });
+        } catch (socketErr) {
+            console.error('[Socket.io] trip_ended emit error:', socketErr.message);
+        }
+
+        res.status(200).json({ message: 'Trip stopped, parents notified', isOnline: false });
+    } catch (err) {
+        console.error('Error stopping trip:', err);
+        res.status(500).json({ error: 'Server Error stopping trip' });
+    }
+};
+
 module.exports = {
     getAssignedRoute,
     getDashboardData,
     updateTripStatus,
-    getProfile
+    getProfile,
+    startTrip,
+    stopTrip
 };
