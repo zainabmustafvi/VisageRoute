@@ -104,7 +104,7 @@ const createStudent = async (req, res) => {
         }
 
         // 4. Check if parent user already exists
-        const existingUser = await User.findOne({ userId: parentEmail });
+        const existingUser = await User.findOne({ email: parentEmail.toLowerCase() });
         if (existingUser) {
             console.log('Error: User already exists:', parentEmail);
             return res.status(400).json({ error: 'A parent account with this email already exists' });
@@ -119,6 +119,7 @@ const createStudent = async (req, res) => {
         console.log('Saving User to database...');
         const user = new User({
             userId: parentEmail,
+            email: parentEmail.toLowerCase(),
             password: hashedPassword,
             role: 'parent'
         });
@@ -210,8 +211,10 @@ const updateStudent = async (req, res) => {
         if (parentEmail || parentName) {
             const user = await User.findById(student.parentId);
             if (user) {
-                if (parentEmail) user.userId = parentEmail;
-                // If we had a 'name' field in User model, we'd update it here
+                if (parentEmail) {
+                    user.userId = parentEmail;
+                    user.email = parentEmail.toLowerCase();
+                }
                 await user.save();
             }
         }
@@ -289,6 +292,7 @@ const createDriver = async (req, res) => {
         // 3. Create User Account
         const user = new User({
             userId: generatedUserId,
+            email: email.toLowerCase(),
             password: hashedPassword,
             role: 'driver'
         });
@@ -315,8 +319,7 @@ const createDriver = async (req, res) => {
         }
 
         // 6. Send Credentials to driver's email
-        // We use the driver's email for notification, but they log in with DRxxxx ID
-        await sendRegistrationEmail(email, name, generatedUserId, plainPassword);
+        await sendRegistrationEmail(email, name, email, plainPassword);
 
         res.status(201).json({
             message: 'Driver registered successfully',
@@ -850,8 +853,7 @@ const createAnnouncement = async (req, res) => {
         // Send via Email
         if (deliveryOptions.email) {
             targetUsers.forEach(user => {
-                // user.userId contains the parent's email
-                sendAnnouncementEmail(user.userId, title, content, priority);
+                sendAnnouncementEmail(user.email || user.userId, title, content, priority);
             });
         }
 

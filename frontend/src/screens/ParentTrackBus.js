@@ -34,6 +34,16 @@ const ParentTrackBus = ({ route, navigation }) => {
             if (res.data.routeInfo?.eta) {
                 setEta(res.data.routeInfo.eta);
             }
+            // If driver is offline, load last known location from DB
+            if (!res.data.routeInfo?.driverOnline && res.data.routeInfo?.latestLocation) {
+                setDriverLocation({
+                    lat: res.data.routeInfo.latestLocation.latitude,
+                    lng: res.data.routeInfo.latestLocation.longitude,
+                });
+                setTripStatus('Bus not currently active. Showing last known location.');
+            } else if (!res.data.routeInfo?.driverOnline) {
+                setTripStatus('Bus not currently active. Waiting for driver to start trip...');
+            }
         } catch (error) {
             console.error('Error fetching child status in tracking:', error);
         } finally {
@@ -43,9 +53,10 @@ const ParentTrackBus = ({ route, navigation }) => {
 
     useEffect(() => {
         let socket;
+        let hasJoinedBus = false;
 
         const setupTracking = async () => {
-            // 1. Fetch child status to get routeId
+            // 1. Fetch child status to get routeId and busId
             await fetchStatus();
 
             // 2. Request location permission to show parent's own position
@@ -74,8 +85,15 @@ const ParentTrackBus = ({ route, navigation }) => {
             socket.on('connect', () => {
                 console.log('[Parent Socket] Connected:', socket.id);
                 setConnected(true);
-                
-                // Fetch the student's routeId and join route room to receive driver's location updates
+
+                // Subscribe to bus room for real-time tracking
+                const busId = childStatus?.student?.busId;
+                if (busId && !hasJoinedBus) {
+                    socket.emit('subscribe_bus', { busID: busId });
+                    hasJoinedBus = true;
+                }
+
+                // Also join legacy route room for backward compatibility
                 if (childStatus?.routeInfo?.routeId) {
                     socket.emit('joinRouteRoom', childStatus.routeInfo.routeId);
                 }
@@ -83,19 +101,35 @@ const ParentTrackBus = ({ route, navigation }) => {
 
             socket.on('connect_error', (err) => {
                 console.error('[Parent Socket] Error:', err.message);
-                setTripStatus('⚠️ Could not connect to server. Check your network.');
+                setTripStatus('Could not connect to server. Check your network.');
             });
 
-            // 4. Listen for live location updates from the driver
+            // 4. Listen for live location updates from the driver (new bus room event)
+            socket.on('bus_location_update', (data) => {
+                setDriverLocation({
+                    lat: data.latitude,
+                    lng: data.longitude,
+                });
+                setEta(data.eta);
+                setTripStatus('Bus is on the way!');
+            });
+
+            // 5. Listen for live location updates (legacy route room event)
             socket.on('locationUpdate', ({ driverLocation: loc, eta: etaMin }) => {
                 setDriverLocation(loc);
                 setEta(etaMin);
-                setTripStatus('🚌 Bus is on the way!');
+                setTripStatus('Bus is on the way!');
             });
 
-            // 5. Listen for trip completion
+            // 6. Listen for trip completion (new bus room event)
+            socket.on('trip_ended', ({ busID }) => {
+                setTripStatus('Trip has ended. The bus has arrived.');
+                setEta(null);
+            });
+
+            // 7. Listen for trip completion (legacy route room event)
             socket.on('tripEnded', ({ message }) => {
-                setTripStatus(`✅ ${message}`);
+                setTripStatus(message || 'Trip has ended.');
                 setEta(null);
             });
 
@@ -107,7 +141,7 @@ const ParentTrackBus = ({ route, navigation }) => {
         return () => {
             if (socket) socket.disconnect();
         };
-    }, [studentId, childStatus?.routeInfo?.routeId]);
+    }, [studentId]);
 
     const handleCallDriver = () => {
         const phone = childStatus?.driverInfo?.phone;

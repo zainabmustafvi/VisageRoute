@@ -23,7 +23,11 @@ const busRouteSchema = new mongoose.Schema({
             locationName: String,
             scheduledTime: String,
             isStart: { type: Boolean, default: false },
-            isEnd: { type: Boolean, default: false }
+            isEnd: { type: Boolean, default: false },
+            coordinates: {
+                latitude: { type: Number, default: 0 },
+                longitude: { type: Number, default: 0 }
+            }
         }
     ],
     estimatedDuration: {

@@ -8,11 +8,11 @@ const Driver = require('../models/Driver');
 // @access  Public
 const login = async (req, res) => {
   try {
-    const { userId, password, role } = req.body;
+    const { email, password, role } = req.body;
 
-    // Strict Input Validation (Basic level, Joi will be added in Month 2)
-    if (!userId || !password || !role) {
-      return res.status(400).json({ error: 'Please provide userId, password, and role' });
+    // Strict Input Validation
+    if (!email || !password || !role) {
+      return res.status(400).json({ error: 'Please provide email, password, and role' });
     }
     
     // Security: Only allow expected roles
@@ -21,8 +21,8 @@ const login = async (req, res) => {
        return res.status(400).json({ error: 'Invalid role specified' });
     }
 
-    // Find User
-    const user = await User.findOne({ userId, role });
+    // Find User by email
+    const user = await User.findOne({ email: email.toLowerCase(), role });
 
     if (!user) {
       // Security Feedback: Generic error to prevent user enumeration
@@ -65,7 +65,8 @@ const login = async (req, res) => {
           message: 'Login successful',
           user: {
             id: user.id,
-            userId: user.userId,
+            userId: user.email || user.userId,
+            email: user.email,
             role: user.role
           }
         };

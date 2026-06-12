@@ -73,6 +73,7 @@ const ParentHome = ({ navigation }) => {
     // Socket connection for instant updates
     useEffect(() => {
         let socket;
+        let hasJoinedBus = false;
         const initSocketConnection = async () => {
             const token = await SecureStore.getItemAsync('socketToken');
             if (!token) return;
@@ -109,10 +110,73 @@ const ParentHome = ({ navigation }) => {
                 }
             });
 
-            // Listen for new announcements
-            socket.on('newAnnouncement', () => {
-                fetchData(selectedStudentId);
+            // Listen for real-time bus location updates (new bus room event)
+            socket.on('bus_location_update', (data) => {
+                const busId = data.busID;
+                // Update ETA in child status if it matches the selected student's bus
+                setChildStatus(prev => {
+                    if (!prev?.student?.busNumber) return prev;
+                    return {
+                        ...prev,
+                        routeInfo: {
+                            ...prev.routeInfo,
+                            driverOnline: true,
+                            eta: data.eta,
+                        }
+                    };
+                });
             });
+
+            // Listen for legacy location updates
+            socket.on('locationUpdate', ({ driverLocation, eta: etaMin }) => {
+                setChildStatus(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        routeInfo: {
+                            ...prev.routeInfo,
+                            driverOnline: true,
+                            eta: etaMin,
+                        }
+                    };
+                });
+            });
+
+            // Listen for trip ended
+            socket.on('trip_ended', () => {
+                setChildStatus(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        routeInfo: {
+                            ...prev.routeInfo,
+                            driverOnline: false,
+                            eta: null,
+                        }
+                    };
+                });
+            });
+
+            socket.on('tripEnded', () => {
+                setChildStatus(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        routeInfo: {
+                            ...prev.routeInfo,
+                            driverOnline: false,
+                            eta: null,
+                        }
+                    };
+                });
+            });
+
+            // Subscribe to bus room once child status is loaded
+            const busId = childStatus?.student?.busId;
+            if (busId && !hasJoinedBus) {
+                socket.emit('subscribe_bus', { busID: busId });
+                hasJoinedBus = true;
+            }
 
             socketRef.current = socket;
         };

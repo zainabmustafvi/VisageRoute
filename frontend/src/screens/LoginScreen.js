@@ -12,7 +12,7 @@ const API_URL = `${API_BASE_URL}/api/auth`;
 
 const LoginScreen = ({ navigation }) => {
     const [role, setRole] = useState('parent');
-    const [userId, setUserId] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
@@ -32,8 +32,8 @@ const LoginScreen = ({ navigation }) => {
 
     const handleLogin = async () => {
         // 1. Basic Frontend Validation
-        if (!userId || !password) {
-            setErrorMsg('Please enter both User ID and Password.');
+        if (!email || !password) {
+            setErrorMsg('Please enter both Email and Password.');
             return;
         }
 
@@ -48,7 +48,7 @@ const LoginScreen = ({ navigation }) => {
         try {
             // 2. Axios Request
             const response = await axios.post(`${API_URL}/login`, {
-                userId,
+                email: email.toLowerCase(),
                 password,
                 role
             });
@@ -83,7 +83,7 @@ const LoginScreen = ({ navigation }) => {
         } catch (error) {
             // 5. Security Feedback Handling
             if (error.response && error.response.status === 401) {
-                setErrorMsg('Invalid credentials. Please verify your User ID and Password.'); // Generic error as requested
+                setErrorMsg('Invalid credentials. Please verify your Email and Password.'); // Generic error as requested
             } else if (error.response && error.response.status === 429) {
                 // Read the specific error message provided by our express-rate-limit backend
                 const backendMsg = error.response.data.error || 'Too many attempts.';
@@ -135,20 +135,22 @@ const LoginScreen = ({ navigation }) => {
                         ))}
                     </View>
 
-                    {/* User ID Input */}
+                    {/* Email Input */}
                     <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>User ID</Text>
+                        <Text style={styles.inputLabel}>Email Address</Text>
                         <View style={styles.inputWrapper}>
-                            <MaterialIcons name="person" size={20} color={Theme.colors.textSecondaryLight} style={styles.inputIcon} />
+                            <MaterialIcons name="email" size={20} color={Theme.colors.textSecondaryLight} style={styles.inputIcon} />
                             <TextInput
                                 style={[
                                     globalStyles.input,
                                     { paddingLeft: 44, borderColor: errorMsg || illegalCharWarning ? Theme.colors.error : Theme.colors.borderLight }
                                 ]}
-                                placeholder="Enter User ID"
-                                value={userId}
-                                onChangeText={(text) => handleInputChange(text, setUserId)}
+                                placeholder="Enter your email"
+                                value={email}
+                                onChangeText={(text) => handleInputChange(text, setEmail)}
+                                keyboardType="email-address"
                                 autoCapitalize="none"
+                                autoCorrect={false}
                                 placeholderTextColor={Theme.colors.textSecondaryLight}
                             />
                         </View>
