@@ -828,25 +828,70 @@ const createAnnouncement = async (req, res) => {
             query._id = { $in: parentIds };
         }
 
-        const targetUsers = await User.find(query).select('userId');
+        const targetUsers = await User.find(query).select('userId email fcmToken notificationPreferences');
         
         let io;
         try {
             io = getIo();
         } catch (sErr) {
-            console.error('Socket not initialized, skipping push notification');
+            console.error('Socket not initialized, skipping socket push notification');
         }
 
-        // Send via Push (Socket.io)
-        if (deliveryOptions.push && io) {
-            targetUsers.forEach(user => {
-                io.to(user._id.toString()).emit('newAnnouncement', {
-                    id: announcement._id,
-                    title,
-                    content,
-                    priority,
-                    sentAt: announcement.sentAt
-                });
+        // Send via Socket.io and FCM
+        if (deliveryOptions.push) {
+            const { sendNotification } = require('../services/fcmService');
+            const AnnouncementDelivery = require('../models/AnnouncementDelivery');
+
+            targetUsers.forEach(async (user) => {
+                // Socket.io real-time update
+                if (io) {
+                    try {
+                        io.to(user._id.toString()).emit('newAnnouncement', {
+                            id: announcement._id,
+                            title,
+                            content,
+                            priority,
+                            sentAt: announcement.sentAt
+                        });
+                    } catch (sockErr) {
+                        console.error('Socket newAnnouncement emit failed:', sockErr.message);
+                    }
+                }
+
+                // Firebase Cloud Messaging Push Notification
+                if (user.fcmToken) {
+                    try {
+                        await sendNotification(
+                            user.fcmToken,
+                            `📢 ${title}`,
+                            content,
+                            { 
+                                type: 'announcement', 
+                                announcementId: announcement._id.toString(),
+                                priority 
+                            }
+                        );
+
+                        // Save to announcementdeliveries
+                        await AnnouncementDelivery.create({
+                            announcementId: announcement._id,
+                            userId: user._id,
+                            status: 'sent'
+                        });
+                    } catch (fcmErr) {
+                        console.error(`FCM/Delivery log failed for user ${user._id}:`, fcmErr.message);
+                        // Save failed delivery
+                        try {
+                            await AnnouncementDelivery.create({
+                                announcementId: announcement._id,
+                                userId: user._id,
+                                status: 'failed'
+                            });
+                        } catch (logErr) {
+                            console.error('Saving failed delivery log failed:', logErr.message);
+                        }
+                    }
+                }
             });
         }
 

@@ -357,6 +357,30 @@ const markAllAnnouncementsRead = async (req, res) => {
     }
 };
 
+// @desc    Update parent's FCM token
+// @route   PATCH /api/parent/fcm-token
+// @access  Private/Parent
+const updateFcmToken = async (req, res) => {
+    try {
+        const { fcmToken } = req.body;
+        
+        const user = await User.findByIdAndUpdate(
+            req.user.id,
+            { fcmToken },
+            { new: true }
+        );
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.status(200).json({ message: 'FCM Token registered/refreshed successfully' });
+    } catch (err) {
+        console.error('Error updating FCM Token:', err);
+        res.status(500).json({ error: 'Server Error updating token' });
+    }
+};
+
 module.exports = {
     getStudentSchedule,
     getAnnouncements,
@@ -365,5 +389,6 @@ module.exports = {
     getParentProfile,
     getPreferences,
     updatePreferences,
-    markAllAnnouncementsRead
+    markAllAnnouncementsRead,
+    updateFcmToken
 };
