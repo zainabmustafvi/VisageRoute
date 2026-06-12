@@ -27,7 +27,7 @@ const sendRegistrationEmail = async (email, name, userId, password) => {
                     <h2 style="color: #f2cc0d;">Welcome to VisageRoute, ${name}!</h2>
                     <p>Your administrative registration is complete. You can now log in to the portal using the following credentials:</p>
                     <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                        <p><strong>User ID (Email):</strong> ${userId}</p>
+                        <p><strong>Your Login Email:</strong> ${email}</p>
                         <p><strong>Password:</strong> <span style="color: #e74c3c;">${password}</span></p>
                     </div>
                     <p>Please change your password after your first login for security purposes.</p>

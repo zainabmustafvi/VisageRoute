@@ -14,24 +14,45 @@ const seedUsers = async () => {
         await User.deleteMany({});
         console.log('Cleared existing users');
 
-        // Generate salted password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash('securepassword123', salt);
+        // Generate salted passwords
+        const adminSalt = await bcrypt.genSalt(10);
+        const driverSalt = await bcrypt.genSalt(10);
+        const parentSalt = await bcrypt.genSalt(10);
+        const parentSalt2 = await bcrypt.genSalt(10);
+        const adminPassword = await bcrypt.hash('Admin@123', adminSalt);
+        const driverPassword = await bcrypt.hash('Driver@123', driverSalt);
+        const parentPassword = await bcrypt.hash('Parent@123', parentSalt);
+        const parentPassword2 = await bcrypt.hash('Parent@123', parentSalt2);
 
         const users = [
             {
                 userId: 'admin1',
-                password: hashedPassword,
+                email: 'admin@visageroute.edu.pk',
+                password: adminPassword,
                 role: 'admin'
             },
             {
-                userId: 'driver1',
-                password: hashedPassword,
+                userId: 'DR1001',
+                email: 'sadaat.malik@visageroute.edu.pk',
+                password: driverPassword,
+                role: 'driver'
+            },
+            {
+                userId: 'DR1002',
+                email: 'ali.raza@visageroute.edu.pk',
+                password: driverPassword,
                 role: 'driver'
             },
             {
                 userId: 'parent1',
-                password: hashedPassword,
+                email: 'mrs.safdr@gmail.com',
+                password: parentPassword,
+                role: 'parent'
+            },
+            {
+                userId: 'parent2',
+                email: 'parent2@gmail.com',
+                password: parentPassword2,
                 role: 'parent'
             }
         ];
