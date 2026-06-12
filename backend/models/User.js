@@ -27,6 +27,10 @@ const userSchema = new mongoose.Schema({
         arrival_notify: { type: Boolean, default: true },
         start_notify: { type: Boolean, default: true },
         onboard_notify: { type: Boolean, default: true }
+    },
+    fcmToken: {
+        type: String,
+        default: null
     }
 }, { timestamps: true });
 
