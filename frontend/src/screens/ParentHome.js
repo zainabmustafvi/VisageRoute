@@ -9,6 +9,8 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { io } from 'socket.io-client';
+import messaging from '@react-native-firebase/messaging';
+import * as Notifications from 'expo-notifications';
 
 const ParentHome = ({ navigation }) => {
     const [latestAnnouncement, setLatestAnnouncement] = useState(null);
@@ -21,6 +23,80 @@ const ParentHome = ({ navigation }) => {
     const socketRef = useRef(null);
     // Ref mirrors selectedStudentId so socket callback always reads the latest value
     const selectedStudentIdRef = useRef(null);
+
+    // Firebase Cloud Messaging Setup
+    useEffect(() => {
+        let unsubRefresh = () => {};
+        let unsubOpened = () => {};
+        let unsubMessage = () => {};
+
+        const setupFCM = async () => {
+            try {
+                const authStatus = await messaging().requestPermission();
+                const enabled =
+                    authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+                    authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+                if (!enabled) return;
+
+                const fcmToken = await messaging().getToken();
+                const token = await SecureStore.getItemAsync('socketToken');
+                if (token && fcmToken) {
+                    await axios.patch(`${API_BASE_URL}/api/parent/fcm-token`, { fcmToken }, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                }
+
+                unsubRefresh = messaging().onTokenRefresh(async (newToken) => {
+                    const freshToken = await SecureStore.getItemAsync('socketToken');
+                    if (freshToken) {
+                        await axios.patch(`${API_BASE_URL}/api/parent/fcm-token`, { fcmToken: newToken }, {
+                            headers: { Authorization: `Bearer ${freshToken}` }
+                        });
+                    }
+                });
+
+                Notifications.setNotificationHandler({
+                    handleNotification: async () => ({
+                        shouldShowAlert: true,
+                        shouldPlaySound: true,
+                        shouldSetBadge: true,
+                    }),
+                });
+
+                unsubOpened = messaging().onNotificationOpenedApp((remoteMessage) => {
+                    if (remoteMessage.data?.type === 'child_boarded') {
+                        navigation.navigate('ParentHome');
+                    } else if (remoteMessage.data?.type === 'bus_arriving') {
+                        navigation.navigate('ParentTrackBus', { studentId: selectedStudentIdRef.current });
+                    } else if (remoteMessage.data?.type === 'trip_started') {
+                        navigation.navigate('ParentTrackBus', { studentId: selectedStudentIdRef.current });
+                    }
+                });
+
+                unsubMessage = messaging().onMessage(async (remoteMessage) => {
+                    await Notifications.scheduleNotificationAsync({
+                        content: {
+                            title: remoteMessage.notification?.title,
+                            body: remoteMessage.notification?.body,
+                            data: remoteMessage.data,
+                        },
+                        trigger: null,
+                    });
+                });
+            } catch (err) {
+                console.warn('[FCM Setup Bypass] FCM is not supported in this client environment:', err.message);
+            }
+        };
+
+        setupFCM();
+
+        return () => {
+            unsubRefresh();
+            unsubOpened();
+            unsubMessage();
+        };
+    }, []);
 
     const fetchData = async (targetStudentId = null) => {
         try {
@@ -85,6 +161,38 @@ const ParentHome = ({ navigation }) => {
 
             socket.on('connect', () => {
                 console.log('[Parent Home Socket] Connected');
+            });
+
+            // Listen for trip_started event
+            socket.on('trip_started', (data) => {
+                console.log('[ParentHome Socket] trip_started received:', data);
+                setChildStatus(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        routeInfo: {
+                            ...prev.routeInfo,
+                            driverOnline: true,
+                            eta: data.eta || prev.routeInfo.eta || 15
+                        }
+                    };
+                });
+            });
+
+            // Listen for child_boarded event
+            socket.on('child_boarded', (data) => {
+                console.log('[ParentHome Socket] child_boarded received:', data);
+                setChildStatus(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        attendance: {
+                            status: 'boarded',
+                            boardingTime: data.boardingTime || new Date(),
+                            alightingTime: null,
+                        }
+                    };
+                });
             });
 
             // Listen for attendance updates — use ref to avoid stale closure
