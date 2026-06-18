@@ -9,7 +9,6 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { io } from 'socket.io-client';
-import messaging from '@react-native-firebase/messaging';
 import * as Notifications from 'expo-notifications';
 
 const ParentHome = ({ navigation }) => {
@@ -24,38 +23,14 @@ const ParentHome = ({ navigation }) => {
     // Ref mirrors selectedStudentId so socket callback always reads the latest value
     const selectedStudentIdRef = useRef(null);
 
-    // Firebase Cloud Messaging Setup
+    // Push Notification Setup using expo-notifications
+    // (Works in Expo Go without native firebase module)
     useEffect(() => {
-        let unsubRefresh = () => {};
-        let unsubOpened = () => {};
-        let unsubMessage = () => {};
+        let notifSubscription = null;
 
-        const setupFCM = async () => {
+        const setupNotifications = async () => {
             try {
-                const authStatus = await messaging().requestPermission();
-                const enabled =
-                    authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-                    authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-
-                if (!enabled) return;
-
-                const fcmToken = await messaging().getToken();
-                const token = await SecureStore.getItemAsync('socketToken');
-                if (token && fcmToken) {
-                    await axios.patch(`${API_BASE_URL}/api/parent/fcm-token`, { fcmToken }, {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
-                }
-
-                unsubRefresh = messaging().onTokenRefresh(async (newToken) => {
-                    const freshToken = await SecureStore.getItemAsync('socketToken');
-                    if (freshToken) {
-                        await axios.patch(`${API_BASE_URL}/api/parent/fcm-token`, { fcmToken: newToken }, {
-                            headers: { Authorization: `Bearer ${freshToken}` }
-                        });
-                    }
-                });
-
+                // 1. Configure foreground notification display
                 Notifications.setNotificationHandler({
                     handleNotification: async () => ({
                         shouldShowAlert: true,
@@ -64,37 +39,71 @@ const ParentHome = ({ navigation }) => {
                     }),
                 });
 
-                unsubOpened = messaging().onNotificationOpenedApp((remoteMessage) => {
-                    if (remoteMessage.data?.type === 'child_boarded') {
+                // 2. Request notification permissions
+                const { status: existingStatus } = await Notifications.getPermissionsAsync();
+                let finalStatus = existingStatus;
+                if (existingStatus !== 'granted') {
+                    const { status } = await Notifications.requestPermissionsAsync();
+                    finalStatus = status;
+                }
+                if (finalStatus !== 'granted') {
+                    console.log('[Notifications] Permission not granted');
+                    return;
+                }
+
+                // 3. Get device FCM token (native token on Android, APNs on iOS)
+                const devicePushToken = await Notifications.getDevicePushTokenAsync();
+                const fcmToken = devicePushToken?.data;
+
+                // 4. Register token with backend
+                const token = await SecureStore.getItemAsync('socketToken');
+                if (token && fcmToken) {
+                    try {
+                        await axios.patch(`${API_BASE_URL}/api/parent/fcm-token`, { fcmToken }, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        console.log('[Notifications] FCM token registered successfully');
+                    } catch (apiErr) {
+                        console.warn('[Notifications] Failed to register token:', apiErr.message);
+                    }
+                }
+
+                // 5. Listen for token changes
+                notifSubscription = Notifications.addPushTokenListener(async (pushToken) => {
+                    const newFcmToken = pushToken?.data;
+                    const freshToken = await SecureStore.getItemAsync('socketToken');
+                    if (freshToken && newFcmToken) {
+                        try {
+                            await axios.patch(`${API_BASE_URL}/api/parent/fcm-token`, { fcmToken: newFcmToken }, {
+                                headers: { Authorization: `Bearer ${freshToken}` }
+                            });
+                        } catch (err) {
+                            console.warn('[Notifications] Token refresh failed:', err.message);
+                        }
+                    }
+                });
+
+                // 6. Handle notification taps (background/quit)
+                Notifications.addNotificationResponseReceivedListener((response) => {
+                    const data = response.notification.request.content.data;
+                    if (data?.type === 'child_boarded') {
                         navigation.navigate('ParentHome');
-                    } else if (remoteMessage.data?.type === 'bus_arriving') {
+                    } else if (data?.type === 'bus_arriving') {
                         navigation.navigate('ParentTrackBus', { studentId: selectedStudentIdRef.current });
-                    } else if (remoteMessage.data?.type === 'trip_started') {
+                    } else if (data?.type === 'trip_started') {
                         navigation.navigate('ParentTrackBus', { studentId: selectedStudentIdRef.current });
                     }
                 });
 
-                unsubMessage = messaging().onMessage(async (remoteMessage) => {
-                    await Notifications.scheduleNotificationAsync({
-                        content: {
-                            title: remoteMessage.notification?.title,
-                            body: remoteMessage.notification?.body,
-                            data: remoteMessage.data,
-                        },
-                        trigger: null,
-                    });
-                });
             } catch (err) {
-                console.warn('[FCM Setup Bypass] FCM is not supported in this client environment:', err.message);
+                console.warn('[Notifications] Setup failed (non-blocking):', err.message);
             }
         };
 
-        setupFCM();
+        setupNotifications();
 
         return () => {
-            unsubRefresh();
-            unsubOpened();
-            unsubMessage();
+            if (notifSubscription) notifSubscription.remove();
         };
     }, []);
 
