@@ -20,18 +20,18 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Theme from '../theme/Theme';
 import { API_BASE_URL } from '../config/api';
 
-// Vision Camera v3
+// Vision Camera v4
 import {
     Camera,
-    useCameraDevices,
+    useCameraDevice,
     useCameraPermission,
     useFrameProcessor,
 } from 'react-native-vision-camera';
 
-// ML Kit face detection (vision-camera-face-detector v0.1.8 for VisionCamera v3)
-import { useFaceDetector } from 'vision-camera-face-detector';
+// ML Kit face detection (react-native-vision-camera-face-detector v1.10 for VisionCamera v4)
+import { useFaceDetector } from 'react-native-vision-camera-face-detector';
 
-// Frame resize / crop (vision-camera-resize-plugin v2 for VisionCamera v3)
+// Frame resize / crop (vision-camera-resize-plugin v3 for VisionCamera v4)
 import { useResizePlugin } from 'vision-camera-resize-plugin';
 
 // TFLite inference (react-native-fast-tflite v1)
@@ -66,8 +66,8 @@ const DriverAttendance = () => {
 
     // ── Camera device: prefer front camera for face scanning ───────────────
     const [facing, setFacing] = useState('front');
-    const devices = useCameraDevices();
-    const device = facing === 'front' ? devices.front : devices.back;
+    // VisionCamera v4: select a device by position directly (v3 used devices.front/back).
+    const device = useCameraDevice(facing);
 
     // ── App state ──────────────────────────────────────────────────────────
     const [students, setStudents] = useState([]);
@@ -100,7 +100,7 @@ const DriverAttendance = () => {
     // ── ML Kit face detector ───────────────────────────────────────────────
     const { detectFaces } = useFaceDetector({
         performanceMode: 'fast',
-        classificationMode: 'all',
+        classificationMode: 'none',
         landmarkMode: 'none',
         contourMode: 'none',
         minFaceSize: 0.15,
@@ -220,18 +220,16 @@ const DriverAttendance = () => {
 
             onFaceStatusJS(true);
 
-            // 3. vision-camera-resize-plugin v2 expects NORMALIZED (0–1) crop coords
-            const frameW = frame.width;
-            const frameH = frame.height;
-
-            // Add 20% padding around the detected face for better recognition
+            // 3. vision-camera-resize-plugin v3 expects crop coords in FRAME PIXELS
+            //    (v2 used normalized 0–1 — this is the key API change).
+            //    Add 10% padding on each side of the detected face for better recognition.
             const padX = face.bounds.width * 0.1;
             const padY = face.bounds.height * 0.1;
 
-            const cropX = Math.max(0, (face.bounds.x - padX) / frameW);
-            const cropY = Math.max(0, (face.bounds.y - padY) / frameH);
-            const cropW = Math.min(1 - cropX, (face.bounds.width + 2 * padX) / frameW);
-            const cropH = Math.min(1 - cropY, (face.bounds.height + 2 * padY) / frameH);
+            const cropX = Math.max(0, face.bounds.x - padX);
+            const cropY = Math.max(0, face.bounds.y - padY);
+            const cropW = Math.min(frame.width - cropX, face.bounds.width + 2 * padX);
+            const cropH = Math.min(frame.height - cropY, face.bounds.height + 2 * padY);
 
             // 4. Crop + resize to 112×112 RGB Float32
             const resized = resize(frame, {
@@ -251,10 +249,12 @@ const DriverAttendance = () => {
 
             if (!resized) return;
 
-            // 5. Normalize pixel values from [0, 255] → [-1, 1]
+            // 5. Normalize to MobileFaceNet's expected [-1, 1] range.
+            //    resize-plugin v3 float32 output is already [0, 1], so map [0,1] → [-1,1].
+            //    (Mathematically identical to the classic (px/127.5)-1 on a [0,255] input.)
             const pixelCount = MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * 3;
             for (let i = 0; i < pixelCount; i++) {
-                resized[i] = (resized[i] / 127.5) - 1.0;
+                resized[i] = resized[i] * 2.0 - 1.0;
             }
 
             // 6. Run TFLite inference synchronously
