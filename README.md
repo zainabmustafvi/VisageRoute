@@ -66,20 +66,32 @@ VisageRoute/
 ## Environment Variables
 
 ```env
-# Backend (.env)
-MONGODB_URI=your_mongodb_atlas_uri
+# Backend (backend/.env)
+MONGO_URI=your_mongodb_atlas_uri          # NOTE: MONGO_URI (not MONGODB_URI)
 JWT_SECRET=your_jwt_secret_min_32_chars
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_SECRET=your_refresh_secret
-FIREBASE_SERVER_KEY=your_fcm_server_key
 PORT=5000
+NODE_ENV=development
+CLIENT_URL=                               # only used when NODE_ENV=production
 
-# Frontend (.env)
-API_BASE_URL=http://your_backend_ip:5000
-SOCKET_URL=http://your_backend_ip:5000
+# Firebase Admin (FCM) — from Firebase Console → Project settings → Service accounts
+FIREBASE_PROJECT_ID=visageroute-4d751     # must match frontend/google-services.json
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@visageroute-4d751.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
+# Email (nodemailer)
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
 ```
 
-> ⚠️ Never commit `.env` files. Both are listed in `.gitignore`.
+```env
+# Frontend (frontend/.env) — inlined into the APK at build time
+EXPO_PUBLIC_API_BASE_URL=http://your_backend_ip:5000   # used for BOTH REST + Socket.io
+```
+
+> ⚠️ Never commit `.env` files or `google-services.json`.
+> `FIREBASE_PRIVATE_KEY` must be on **one line** with literal `\n` for newlines, in double quotes.
 
 ---
 
@@ -148,9 +160,74 @@ npm run dev
 # Frontend setup
 cd frontend
 npm install
-cp .env.example .env        # fill in API_BASE_URL
+cp .env.example .env        # set EXPO_PUBLIC_API_BASE_URL
 npx expo start
 ```
+
+> **Note:** the camera / face-scan features use native modules and **cannot run in Expo Go**.
+> Use `npx expo start` only for the non-camera screens, or build a real APK (see below).
+
+---
+
+## Building a Shareable Android APK
+
+This produces a **standalone release APK** (`app-release.apk`) that runs on its own — no
+Metro / dev server needed — so you can send it to anyone with an Android phone.
+
+### Prerequisites (one-time)
+
+| Requirement | Notes |
+|-------------|-------|
+| **JDK 17** + **Android SDK** | Install via Android Studio |
+| **`frontend/google-services.json`** | Firebase Console → your project → Add app → **Android**, package **`com.visageroute.app`**, download, place in `frontend/` |
+| **`expo-build-properties`** | Already in `package.json`; run `npx expo install` if node_modules is fresh |
+
+> Minimum Android version is **8.0 (minSdk 26)** — required by the face-detection library.
+
+### Step 1 — Point the app at your backend (IMPORTANT)
+
+The backend URL is **baked into the APK at build time** from `frontend/.env`. Anyone you
+share the APK with must be able to reach this URL, so a **public HTTPS URL is recommended**
+(a `localhost`/LAN IP only works on the same WiFi as your dev machine).
+
+```bash
+# frontend/.env
+EXPO_PUBLIC_API_BASE_URL=https://your-public-backend.com   # http:// also works (cleartext is enabled)
+```
+
+If `.env` is missing, the app falls back to the LAN IP hardcoded in `src/config/api.js`.
+
+### Step 2 — Build the APK
+
+```bash
+cd frontend
+
+# (first time, or after changing native deps / app.json)
+npx expo prebuild -p android --clean
+
+# compile the standalone release APK
+cd android
+./gradlew assembleRelease
+```
+
+### Step 3 — Grab & share
+
+```
+frontend/android/app/build/outputs/apk/release/app-release.apk
+```
+
+Send that file (Drive, WhatsApp, etc.). The installer must enable "Install from unknown
+sources". **Change the backend URL?** Re-run Step 1 + Step 2.
+
+### Notes
+
+- **Signing:** the release APK is signed with the **debug keystore** (fine for testing/sharing,
+  not the Play Store). For testers to install *updates* over an old build, generate one release
+  keystore and reuse it.
+- **Size:** ~168 MB — it bundles all CPU architectures + the TFLite model. To shrink, use ABI
+  splits or an `.aab` app bundle.
+- **Camera stack:** VisionCamera **v4** + `react-native-vision-camera-face-detector` +
+  `vision-camera-resize-plugin` v3 (required for React Native 0.83).
 
 ---
 
