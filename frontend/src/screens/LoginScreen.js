@@ -19,9 +19,7 @@ const LoginScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(false);
     const [illegalCharWarning, setIllegalCharWarning] = useState(false);
 
-    // OWASP - Input Sanitization check (Real-time feedback)
     const handleInputChange = (text, setter) => {
-        // Simple check for illegal NoSQL characters: $ . { }
         if (/[\$\.\{\}]/.test(text)) {
             setIllegalCharWarning(true);
         } else {
@@ -31,321 +29,131 @@ const LoginScreen = ({ navigation }) => {
     };
 
     const handleLogin = async () => {
-        // 1. Basic Frontend Validation
-        if (!email || !password) {
-            setErrorMsg('Please enter both Email and Password.');
-            return;
-        }
-
-        if (illegalCharWarning) {
-            setErrorMsg('Security Block: Invalid characters detected in input.');
-            return;
-        }
-
         setErrorMsg('');
-        setLoading(true);
+        
+        // Frontend Input Email Format Regex Verification
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            setErrorMsg("Please enter a valid email address");
+            return;
+        }
 
+        if (!password || password.length < 6) {
+            setErrorMsg("Password must be at least 6 characters");
+            return;
+        }
+
+        setLoading(false);
         try {
-            // 2. Axios Request
             const response = await axios.post(`${API_URL}/login`, {
-                email: email.toLowerCase(),
+                email: email.toLowerCase().trim(),
                 password,
                 role
             });
 
-            // 3. Store user data securely
-            if (response.data.user) {
-                await SecureStore.setItemAsync('userRole', response.data.user.role);
-                
-                // Store driver-specific data if available
-                if (response.data.user.driverId) {
-                    await SecureStore.setItemAsync('driverId', response.data.user.driverId);
-                }
-                if (response.data.user.assignedBusId) {
-                    await SecureStore.setItemAsync('assignedBusId', response.data.user.assignedBusId);
-                }
+            if (response.data && response.data.token) {
+                await SecureStore.setItemAsync('userToken', response.data.token);
+                await SecureStore.setItemAsync('userData', JSON.stringify(response.data.user));
 
-                // Also extract + store the JWT token for Socket.io auth
-                // The server sets it as an HTTP-only cookie named 'token'
-                const setCookie = response.headers?.['set-cookie']?.[0] || '';
-                if (setCookie.includes('token=')) {
-                    const token = setCookie.split('token=')[1].split(';')[0];
-                    await SecureStore.setItemAsync('socketToken', token);
-                }
-
-                // 4. Role-based Navigation
-                switch (response.data.user.role) {
-                    case 'admin': navigation.replace('AdminHome'); break;
-                    case 'driver': navigation.replace('DriverHome'); break;
-                    case 'parent': navigation.replace('ParentHome'); break;
-                }
+                if (role === 'admin') navigation.replace('AdminHome');
+                else if (role === 'driver') navigation.replace('DriverHome');
+                else navigation.replace('ParentHome');
             }
         } catch (error) {
-            // 5. Security Feedback Handling
-            if (error.response && error.response.status === 401) {
-                setErrorMsg('Invalid credentials. Please verify your Email and Password.'); // Generic error as requested
-            } else if (error.response && error.response.status === 429) {
-                // Read the specific error message provided by our express-rate-limit backend
-                const backendMsg = error.response.data.error || 'Too many attempts.';
-                setErrorMsg(`Security Alert: ${backendMsg} The login button is temporarily disabled.`);
-            } else {
-                setErrorMsg('Network error. Ensure backend is running.');
-            }
-        } finally {
-            setLoading(false);
+            setErrorMsg(error.response?.data?.error || 'Authentication failed');
         }
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <SafeAreaView style={[globalStyles.container, styles.bgContainer]}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center', padding: Theme.spacing.lg }}>
+                <Text style={styles.logoText}>VisageRoute</Text>
+                
+                {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+                {illegalCharWarning ? <Text style={styles.warningText}>Warning: Avoid potential system syntax characters ($, ., {'{', '}'})</Text> : null}
 
-                {/* Header Hero Section */}
-                <View style={styles.heroContainer}>
-                    <View style={styles.iconCircle}>
-                        <MaterialIcons name="directions-bus" size={32} color={Theme.colors.brandGrey} />
-                    </View>
-                    <Text style={styles.heroTitle}>VisageRoute</Text>
-                    <Text style={styles.heroSubtitle}>Track your campus ride</Text>
+                {/* Role Toggles */}
+                <View style={styles.radioContainer}>
+                    {['parent', 'driver', 'admin'].map((item) => (
+                        <TouchableOpacity key={item} style={styles.radioOption} onPress={() => setRole(item)}>
+                            <View style={[styles.radioCircle, role === item && styles.radioActive]}>
+                                {role === item && <View style={styles.radioInner} />}
+                            </View>
+                            <Text style={styles.radioLabel}>{item.toUpperCase()}</Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
 
-                {/* Form Section */}
-                <View style={styles.formContainer}>
-                    <Text style={styles.welcomeText}>Welcome Back!</Text>
-                    <Text style={styles.instructionText}>Please sign in to continue</Text>
-
-                    {/* Error Message */}
-                    {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
-                    {illegalCharWarning ? <Text style={styles.errorText}>Warning: Illegal characters ($, ., {'{'}, {'}'}) are not allowed.</Text> : null}
-
-                    {/* Role Selection */}
-                    <View style={styles.roleContainer}>
-                        {['parent', 'driver', 'admin'].map((r) => (
-                            <TouchableOpacity
-                                key={r}
-                                style={styles.radioGroup}
-                                onPress={() => setRole(r)}
-                                activeOpacity={0.7}
-                            >
-                                <View style={[styles.radioOuter, role === r && styles.radioOuterActive]}>
-                                    {role === r && <View style={styles.radioInner} />}
-                                </View>
-                                <Text style={styles.radioLabel}>{r.charAt(0).toUpperCase() + r.slice(1)}</Text>
-                            </TouchableOpacity>
-                        ))}
+                {/* Email Fields */}
+                <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Email Address</Text>
+                    <View style={styles.inputWrapper}>
+                        <MaterialIcons name="email" size={20} color={Theme.colors.textSecondaryLight} style={styles.inputIcon} />
+                        <TextInput 
+                            style={[globalStyles.input, { paddingLeft: 48 }]} 
+                            placeholder="Enter your email" 
+                            placeholderTextColor={Theme.colors.textSecondaryLight}
+                            value={email}
+                            onChangeText={(text) => handleInputChange(text.toLowerCase(), setEmail)}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                        />
                     </View>
-
-                    {/* Email Input */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Email Address</Text>
-                        <View style={styles.inputWrapper}>
-                            <MaterialIcons name="email" size={20} color={Theme.colors.textSecondaryLight} style={styles.inputIcon} />
-                            <TextInput
-                                style={[
-                                    globalStyles.input,
-                                    { paddingLeft: 44, borderColor: errorMsg || illegalCharWarning ? Theme.colors.error : Theme.colors.borderLight }
-                                ]}
-                                placeholder="Enter your email"
-                                value={email}
-                                onChangeText={(text) => handleInputChange(text, setEmail)}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                                placeholderTextColor={Theme.colors.textSecondaryLight}
-                            />
-                        </View>
-                    </View>
-
-                    {/* Password Input */}
-                    <View style={styles.inputGroup}>
-                        <View style={styles.passwordHeader}>
-                            <Text style={styles.inputLabel}>Password</Text>
-                            <TouchableOpacity><Text style={styles.forgotText}>Forgot?</Text></TouchableOpacity>
-                        </View>
-                        <View style={styles.inputWrapper}>
-                            <MaterialIcons name="lock" size={20} color={Theme.colors.textSecondaryLight} style={styles.inputIcon} />
-                            <TextInput
-                                style={[
-                                    globalStyles.input,
-                                    { paddingLeft: 44, paddingRight: 44, borderColor: errorMsg || illegalCharWarning ? Theme.colors.error : Theme.colors.borderLight }
-                                ]}
-                                placeholder="••••••••"
-                                secureTextEntry={!showPassword}
-                                value={password}
-                                onChangeText={(text) => handleInputChange(text, setPassword)}
-                                placeholderTextColor={Theme.colors.textSecondaryLight}
-                            />
-                            <TouchableOpacity style={styles.eyeIcon} onPress={() => setShowPassword(!showPassword)}>
-                                <MaterialIcons name={showPassword ? "visibility" : "visibility-off"} size={20} color={Theme.colors.textSecondaryLight} />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-
-                    {/* Submit Button */}
-                    <TouchableOpacity
-                        style={[globalStyles.primaryButton, (loading || errorMsg.includes('Security Alert')) && { opacity: 0.5 }]}
-                        onPress={handleLogin}
-                        disabled={loading || errorMsg.includes('Security Alert')}
-                    >
-                        <Text style={globalStyles.primaryButtonText}>
-                            {loading ? 'Authenticating...' : 'Log In'}
-                        </Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.supportContainer}>
-                        <MaterialIcons name="support-agent" size={16} color={Theme.colors.textSecondaryLight} />
-                        <Text style={styles.supportText}>Need help? Contact Transport Dept.</Text>
-                    </View>
-
                 </View>
+
+                {/* Password Fields */}
+                <View style={styles.inputGroup}>
+                    <View style={styles.passwordHeader}>
+                        <Text style={styles.inputLabel}>Password</Text>
+                    </View>
+                    <View style={styles.inputWrapper}>
+                        <MaterialIcons name="lock" size={20} color={Theme.colors.textSecondaryLight} style={styles.inputIcon} />
+                        <TextInput 
+                            style={[globalStyles.input, { paddingLeft: 48, paddingRight: 48 }]} 
+                            placeholder="Enter password" 
+                            placeholderTextColor={Theme.colors.textSecondaryLight}
+                            secureTextEntry={!showPassword}
+                            value={password}
+                            onChangeText={(text) => handleInputChange(text, setPassword)}
+                        />
+                        <TouchableOpacity style={styles.eyeIcon} onPress={() => setShowPassword(!showPassword)}>
+                            <MaterialIcons name={showPassword ? "visibility" : "visibility-off"} size={20} color={Theme.colors.textSecondaryLight} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Forgot Password Navigation Trigger */}
+                <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={{ alignSelf: 'flex-end', marginBottom: Theme.spacing.md }}>
+                    <Text style={styles.forgotText}>Forgot Password?</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={globalStyles.button} onPress={handleLogin}>
+                    <Text style={globalStyles.buttonText}>{loading ? 'Loading...' : 'Login'}</Text>
+                </TouchableOpacity>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: Theme.colors.backgroundLight,
-    },
-    heroContainer: {
-        height: 240,
-        backgroundColor: 'rgba(242, 204, 13, 0.2)', // primary at 20%
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        paddingBottom: 24,
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
-    },
-    iconCircle: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: Theme.colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    heroTitle: {
-        fontSize: Theme.typography.sizes['3xl'],
-        fontWeight: 'bold',
-        color: Theme.colors.brandGrey,
-    },
-    heroSubtitle: {
-        fontSize: Theme.typography.sizes.sm,
-        color: Theme.colors.textSecondaryLight,
-        marginTop: 4,
-    },
-    formContainer: {
-        flex: 1,
-        paddingHorizontal: 24,
-        paddingTop: 16,
-    },
-    welcomeText: {
-        fontSize: Theme.typography.sizes['2xl'],
-        fontWeight: 'bold',
-        color: Theme.colors.brandGrey,
-        textAlign: 'center',
-        marginBottom: 4,
-    },
-    instructionText: {
-        fontSize: Theme.typography.sizes.base,
-        color: Theme.colors.textSecondaryLight,
-        textAlign: 'center',
-        marginBottom: 24,
-    },
-    errorText: {
-        color: Theme.colors.error,
-        textAlign: 'center',
-        marginBottom: 12,
-        fontWeight: '500',
-    },
-    roleContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 24,
-        paddingHorizontal: 16,
-    },
-    radioGroup: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    radioOuter: {
-        height: 20,
-        width: 20,
-        borderRadius: 10,
-        borderWidth: 2,
-        borderColor: Theme.colors.borderLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 8,
-        backgroundColor: Theme.colors.surfaceLight,
-    },
-    radioOuterActive: {
-        borderColor: Theme.colors.primary,
-    },
-    radioInner: {
-        height: 10,
-        width: 10,
-        borderRadius: 5,
-        backgroundColor: Theme.colors.primary,
-    },
-    radioLabel: {
-        fontSize: Theme.typography.sizes.sm,
-        fontWeight: '500',
-        color: Theme.colors.brandGrey,
-    },
-    inputGroup: {
-        marginBottom: 20,
-    },
-    inputLabel: {
-        fontSize: Theme.typography.sizes.sm,
-        fontWeight: '600',
-        color: Theme.colors.brandGrey,
-        marginBottom: 8,
-        marginLeft: 4,
-    },
-    inputWrapper: {
-        position: 'relative',
-        justifyContent: 'center',
-    },
-    inputIcon: {
-        position: 'absolute',
-        left: 16,
-        zIndex: 1,
-    },
-    passwordHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    forgotText: {
-        fontSize: Theme.typography.sizes.sm,
-        color: Theme.colors.primary,
-        fontWeight: '500',
-    },
-    eyeIcon: {
-        position: 'absolute',
-        right: 16,
-        zIndex: 1,
-        padding: 4,
-    },
-    supportContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 32,
-        gap: 8,
-    },
-    supportText: {
-        fontSize: Theme.typography.sizes.xs,
-        color: Theme.colors.textSecondaryLight,
-    }
+    bgContainer: { backgroundColor: Theme.colors.backgroundLight },
+    logoText: { fontSize: Theme.typography.sizes['4xl'], color: Theme.colors.brandGrey, textAlign: 'center', marginBottom: Theme.spacing.xl, fontWeight: '800' },
+    errorText: { color: Theme.colors.error, textAlign: 'center', marginBottom: 12 },
+    warningText: { color: 'orange', fontSize: 11, textAlign: 'center', marginBottom: 8 },
+    radioContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+    radioOption: { flexDirection: 'row', alignItems: 'center' },
+    radioCircle: { height: 20, width: 20, borderRadius: 10, borderWidth: 2, borderColor: Theme.colors.borderDark, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+    radioActive: { borderColor: Theme.colors.primary },
+    radioInner: { height: 10, width: 10, borderRadius: 5, backgroundColor: Theme.colors.primary },
+    radioLabel: { fontSize: Theme.typography.sizes.sm, fontWeight: '600', color: Theme.colors.brandGrey },
+    inputGroup: { marginBottom: 20 },
+    inputLabel: { fontSize: Theme.typography.sizes.sm, fontWeight: '600', color: Theme.colors.brandGrey, marginBottom: 8, marginLeft: 4 },
+    inputWrapper: { position: 'relative', justifyContent: 'center' },
+    inputIcon: { position: 'absolute', left: 16, zIndex: 1 },
+    passwordHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    forgotText: { fontSize: Theme.typography.sizes.sm, color: Theme.colors.brandGrey, fontWeight: '600', textDecorationLine: 'underline' },
+    eyeIcon: { position: 'absolute', right: 16, zIndex: 1 }
 });
 
 export default LoginScreen;

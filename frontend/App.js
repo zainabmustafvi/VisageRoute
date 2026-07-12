@@ -54,6 +54,17 @@ export default function App() {
           <Stack.Screen name="ParentProfile" component={ParentProfile} />
           <Stack.Screen name="ParentNotifications" component={ParentNotifications} />
           <Stack.Screen name="ParentAnnouncements" component={ParentAnnouncements} />
+          // Append directly inside your Stack.Navigator element structure:
+<Stack.Screen 
+  name="ForgotPassword" 
+  component={ForgotPasswordScreen} 
+  options={{ headerShown: false }} 
+/>
+<Stack.Screen 
+  name="ResetPassword" 
+  component={ResetPasswordScreen} 
+  options={{ headerShown: false }} 
+/>
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
