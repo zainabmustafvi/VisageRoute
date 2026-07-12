@@ -11,6 +11,11 @@ const http = require('http');
 const { initSocket } = require('./config/socket');
 
 const app = express();
+
+// Trust Railway's proxy so express-rate-limit can correctly read the
+// client IP from the X-Forwarded-For header.
+app.set('trust proxy', 1);
+
 const server = http.createServer(app);
 
 // Initialize Socket.io securely
