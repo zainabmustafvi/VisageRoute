@@ -205,7 +205,7 @@ const logout = (req, res) => {
   res.json({ message: 'Logged out successfully' });
 };
 
-module.exports = { login, logout, forgotPassword, resetPassword };const jwt = require('jsonwebtoken');
+module.exports = { login, logout, forgotPassword, resetPassword };
 const bcrypt = require('bcryptjs');
 const { z } = require('zod');
 const nodemailer = require('nodemailer');
