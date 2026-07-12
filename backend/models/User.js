@@ -31,6 +31,14 @@ const userSchema = new mongoose.Schema({
     fcmToken: {
         type: String,
         default: null
+    },
+    resetCode: {
+        type: String,
+        default: null
+    },
+    resetCodeExpiry: {
+        type: Date,
+        default: null
     }
 }, { timestamps: true });
 
