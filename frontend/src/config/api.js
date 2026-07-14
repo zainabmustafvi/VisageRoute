@@ -9,4 +9,5 @@
 //   EXPO_PUBLIC_API_BASE_URL=https://api.your-domain.com
 //
 // Falls back to the local dev-machine LAN IP when the env var is not set.
-export const API_BASE_URL = 'https://visageroute-production.up.railway.app';
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://192.168.0.106:5000';

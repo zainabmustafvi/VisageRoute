@@ -1,27 +1,30 @@
 const jwt = require('jsonwebtoken');
 
 const protect = (req, res, next) => {
-    // Get token from cookie (Primary secure method) OR Authorization header (fallback for mobile if needed, though cookies are preferred)
     let token = req.cookies.token;
 
+    // Support both HttpOnly cookies and mobile Authorization Headers
     if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
         token = req.headers.authorization.split(' ')[1];
     }
 
-    // Check if no token
     if (!token) {
         return res.status(401).json({ error: 'Not authorized, no token' });
     }
 
     try {
-        // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Add user from payload
-        req.user = decoded.user;
+        // FIX: Assign the decoded payload directly since there's no nested "user" object
+        req.user = {
+            id: decoded.userId,
+            role: decoded.role,
+            email: decoded.email
+        };
+        
         next();
     } catch (err) {
-        res.status(401).json({ error: 'Token is not valid' });
+        return res.status(401).json({ error: 'Token is not valid' });
     }
 };
 
