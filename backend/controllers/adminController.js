@@ -319,7 +319,12 @@ const createDriver = async (req, res) => {
         }
 
         // 6. Send Credentials to driver's email
-        await sendRegistrationEmail(email, name, email, plainPassword);
+        // NEW TRY-CATCH BLOCK: Prevents SMTP timeout crashes from breaking the registration flow.
+       try {
+            await sendRegistrationEmail(email, name, email, plainPassword);
+        } catch (emailError) {
+            console.error('Email failed to send but driver registration was successful:', emailError);
+        }
 
         res.status(201).json({
             message: 'Driver registered successfully',
