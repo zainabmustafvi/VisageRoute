@@ -1,3 +1,4 @@
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +23,10 @@ import ParentProfile from './src/screens/ParentProfile';
 import ParentNotifications from './src/screens/ParentNotifications';
 import ParentAnnouncements from './src/screens/ParentAnnouncements';
 
+// Newly Added Password Reset Screens Imports
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
+
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -37,6 +42,10 @@ export default function App() {
         >
           <Stack.Screen name="Splash" component={SplashScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
+
+          {/* Password Reset Flows */}
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
 
           {/* Role-Based Protected Routings */}
           <Stack.Screen name="AdminHome" component={AdminNavigator} />
@@ -54,17 +63,6 @@ export default function App() {
           <Stack.Screen name="ParentProfile" component={ParentProfile} />
           <Stack.Screen name="ParentNotifications" component={ParentNotifications} />
           <Stack.Screen name="ParentAnnouncements" component={ParentAnnouncements} />
-          // Append directly inside your Stack.Navigator element structure:
-<Stack.Screen 
-  name="ForgotPassword" 
-  component={ForgotPasswordScreen} 
-  options={{ headerShown: false }} 
-/>
-<Stack.Screen 
-  name="ResetPassword" 
-  component={ResetPasswordScreen} 
-  options={{ headerShown: false }} 
-/>
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

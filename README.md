@@ -94,6 +94,21 @@ EXPO_PUBLIC_API_BASE_URL=http://your_backend_ip:5000   # used for BOTH REST + So
 > `FIREBASE_PRIVATE_KEY` must be on **one line** with literal `\n` for newlines, in double quotes.
 
 ---
+##Capture Real-Time Logs via ADB (Recommended)
+
+The Android Debug Bridge (ADB) allows you to stream the internal system logs of any connected device or emulator directly to your computer terminal.Connect your device: Connect your physical Android phone via USB and ensure USB Debugging is turned on in your phone's Developer Options.Clear old logs: Open your computer's terminal and clear out stale history so you only see the new crash data:
+
+bash
+adb logcat -c
+
+Stream error logs: Run the following command to filter and display only critical runtime errors:
+
+bash
+adb logcat *:E
+
+Use code with caution.Trigger the crash: Open your APK app on the phone and make it crash.
+
+Analyze the output: Look for tags like AndroidRuntime, unknown, ReactNative, or SoLoader. The terminal will print a detailed Java stack trace pointing to the exact library or component that failed
 
 ## Face Recognition Flow
 
