@@ -147,4 +147,7 @@ const cosineSimilarity = (a, b) => {
     return dot / (magA * magB);
 };
 
-module.exports = { extractFaceEmbedding, loadModels, compareEmbeddings, cosineSimilarity };
+// Face recognition removed from the system.
+// Kept as a stub to avoid runtime import errors if referenced unexpectedly.
+module.exports = {};
+

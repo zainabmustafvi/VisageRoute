@@ -57,10 +57,7 @@ const studentSchema = new mongoose.Schema({
         ref: 'User',
         required: true,
     },
-    faceEmbedding: {
-        type: [Number], // 128-d face embedding array
-        required: false,
-    },
+
     busId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Bus',

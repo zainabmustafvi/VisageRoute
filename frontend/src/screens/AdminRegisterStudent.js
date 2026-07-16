@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    TextInput, StatusBar, Image, ActivityIndicator, Alert
+    TextInput, StatusBar, ActivityIndicator, Alert
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+
 import { colors, typography, spacing } from '../theme/Theme';
 import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
@@ -22,10 +22,8 @@ const AdminRegisterStudent = ({ navigation, route }) => {
     const [buses, setBuses] = useState([]);
     const [isLoadingBuses, setIsLoadingBuses] = useState(false);
 
-    // Photo state
-    const [photoUri, setPhotoUri] = useState(null);
-    const [photoBase64, setPhotoBase64] = useState(null);
     const [errors, setErrors] = useState({});
+
 
     // Form states
     const [fullName, setFullName] = useState(studentData?.name || '');
@@ -67,28 +65,7 @@ const AdminRegisterStudent = ({ navigation, route }) => {
         }
     };
 
-    // ─── Open Phone Gallery ───────────────────────────────────────────
-    const handlePickPhoto = async () => {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert('Permission Required', 'Please allow access to your photo gallery.');
-            return;
-        }
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-        });
-
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            const asset = result.assets[0];
-            setPhotoUri(asset.uri);
-            const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' });
-            setPhotoBase64(base64);
-        }
-    };
 
     // ─── Form Validation ──────────────────────────────────────────────
     const validateForm = () => {
@@ -100,10 +77,8 @@ const AdminRegisterStudent = ({ navigation, route }) => {
         if (!parentName.trim()) newErrors.parentName = true;
         if (!parentEmail.trim() || !parentEmail.includes('@')) newErrors.parentEmail = true;
         
-        // Photo is only strictly required for new registrations
-        if (!isEditMode && !photoBase64) newErrors.photo = true;
-
         setErrors(newErrors);
+
         if (Object.keys(newErrors).length > 0) {
             Alert.alert('Validation Error', 'Please fill in all required fields.');
             return false;
@@ -135,8 +110,8 @@ const AdminRegisterStudent = ({ navigation, route }) => {
                 year,
                 semester,
                 pickupPoint,
-                imageBase64: photoBase64,
             };
+
 
             if (isEditMode) {
                 await axios.put(url, payload, { headers: { Authorization: `Bearer ${token}` } });
@@ -168,23 +143,7 @@ const AdminRegisterStudent = ({ navigation, route }) => {
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {/* ── Photo Upload ── */}
-                <View style={styles.photoSection}>
-                    <TouchableOpacity 
-                        style={[styles.photoFrame, errors.photo && styles.errorBorder]} 
-                        onPress={handlePickPhoto}
-                    >
-                        {photoUri ? (
-                            <Image source={{ uri: photoUri }} style={styles.photo} />
-                        ) : (
-                            <View style={styles.photoPlaceholder}>
-                                <MaterialCommunityIcons name="camera-plus" size={40} color="#9ca3af" />
-                                <Text style={styles.photoPlaceholderText}>Add Photo</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                    <Text style={styles.photoTip}>Take a clear face photo for AI attendance</Text>
-                </View>
+
 
                 {/* ── Personal Details ── */}
                 <View style={styles.section}>

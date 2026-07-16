@@ -110,26 +110,10 @@ Use code with caution.Trigger the crash: Open your APK app on the phone and make
 
 Analyze the output: Look for tags like AndroidRuntime, unknown, ReactNative, or SoLoader. The terminal will print a detailed Java stack trace pointing to the exact library or component that failed
 
-## Face Recognition Flow
+## (Removed) Face Recognition Flow
 
-```
-Driver opens camera
-       ↓
-react-native-vision-camera captures frame
-       ↓
-Google ML Kit detects face → bounding box
-       ↓
-TFLite (MobileFaceNet) generates 128-d embedding on-device
-       ↓
-Embedding sent to Node.js backend via HTTPS POST
-       ↓
-Backend queries MongoDB: cosine similarity vs stored embeddings
-(threshold ≥ 0.6 for match)
-       ↓
-Match found → log attendance + send FCM to parent
-```
-![face recognition flow](image.png)
----
+The face recognition + face-scanned attendance feature has been removed from VisageRoute.
+
 
 ## Real-Time GPS Flow (Socket.io)
 

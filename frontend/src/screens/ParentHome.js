@@ -13,6 +13,7 @@ import messaging from '@react-native-firebase/messaging';
 import * as Notifications from 'expo-notifications';
 
 const ParentHome = ({ navigation }) => {
+
     const [latestAnnouncement, setLatestAnnouncement] = useState(null);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
@@ -337,50 +338,7 @@ const ParentHome = ({ navigation }) => {
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    // Render child card status content
-    const renderCardStatus = () => {
-        if (!childStatus) {
-            return (
-                <View style={styles.onBoardRow}>
-                    <MaterialIcons name="cancel" size={14} color="#9ca3af" />
-                    <Text style={styles.onBoardText}>Not On Board</Text>
-                </View>
-            );
-        }
 
-        const { attendance } = childStatus;
-        if (attendance && attendance.status === 'boarded') {
-            return (
-                <View>
-                    <View style={styles.onBoardRow}>
-                        <View style={[styles.statusIndicatorDot, { backgroundColor: '#22c55e' }]} />
-                        <Text style={[styles.onBoardText, { color: '#16a34a' }]}>On Board</Text>
-                    </View>
-                    <Text style={styles.boardingTimeSub}>Checked in at {formatTime(attendance.boardingTime)}</Text>
-                </View>
-            );
-        } else if (attendance && (attendance.status === 'dropped_off' || attendance.alightingTime)) {
-            return (
-                <View>
-                    <View style={styles.onBoardRow}>
-                        <View style={[styles.statusIndicatorDot, { backgroundColor: '#3b82f6' }]} />
-                        <Text style={[styles.onBoardText, { color: '#2563eb' }]}>Dropped Off</Text>
-                    </View>
-                    <Text style={styles.boardingTimeSub}>Alighted at {formatTime(attendance.alightingTime)}</Text>
-                </View>
-            );
-        } else {
-            return (
-                <View>
-                    <View style={styles.onBoardRow}>
-                        <View style={[styles.statusIndicatorDot, { backgroundColor: '#9ca3af' }]} />
-                        <Text style={styles.onBoardText}>Not On Board</Text>
-                    </View>
-                    <Text style={styles.boardingTimeSub}>No activity today</Text>
-                </View>
-            );
-        }
-    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -468,31 +426,7 @@ const ParentHome = ({ navigation }) => {
                         </View>
                     </View>
 
-                    <TouchableOpacity 
-                        style={[styles.card, styles.studentCard]}
-                        onPress={() => navigation.navigate('ParentTrackBus', { studentId: selectedStudentId })}
-                    >
-                        <View style={styles.studentTop}>
-                            <View style={styles.avatar}>
-                                <MaterialIcons name="face" size={32} color="#3b82f6" />
-                            </View>
-                            <View style={[
-                                styles.safeBadge, 
-                                { backgroundColor: childStatus?.attendance?.status === 'boarded' ? '#dcfce7' : '#f3f4f6' }
-                            ]}>
-                                <Text style={[
-                                    styles.safeBadgeText, 
-                                    { color: childStatus?.attendance?.status === 'boarded' ? '#15803d' : '#6b7280' }
-                                ]}>
-                                    {childStatus?.attendance?.status === 'boarded' ? 'SAFE' : 'PENDING'}
-                                </Text>
-                            </View>
-                        </View>
-                        <View>
-                            <Text style={styles.studentName}>{childStatus?.student?.name || 'Child'}</Text>
-                            {renderCardStatus()}
-                        </View>
-                    </TouchableOpacity>
+
                 </View>
 
                 {/* Quick Access */}
