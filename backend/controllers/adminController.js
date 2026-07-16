@@ -12,7 +12,7 @@ const Announcement = require('../models/Announcement');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { sendRegistrationEmail, sendAnnouncementEmail } = require('../utils/emailService');
-const { extractFaceEmbedding } = require('../utils/faceService');
+
 const { getIo } = require('../config/socket');
 
 // Helper to generate a random password
@@ -73,35 +73,12 @@ const getStudents = async (req, res) => {
 // @access  Private/Admin
 const createStudent = async (req, res) => {
     try {
-        const { name, email, phone, address, parentName, parentEmail, department, routeId, imageBase64 } = req.body;
+        const { name, email, phone, address, parentName, parentEmail, department, routeId } = req.body;
 
         // 1. Validate required fields
         console.log('--- Starting Student Registration ---');
         console.log('Registration details:', { name, email, phone });
 
-        if (!imageBase64) {
-            console.log('Error: Missing imageBase64');
-            return res.status(400).json({ error: 'Student photo is required' });
-        }
-
-        // 2. Extract face embedding from uploaded photo
-        let faceEmbedding;
-        try {
-            console.log('Extracting face embedding...');
-            faceEmbedding = await extractFaceEmbedding(imageBase64);
-            console.log('Face embedding extracted successfully. Length:', faceEmbedding ? faceEmbedding.length : 0);
-        } catch (error) {
-            console.error('CRITICAL: Face processing error details:', error.message || error);
-            return res.status(500).json({ error: 'Failed to process face image. Please try again.' });
-        }
-
-        // 3. Block registration if no face detected in photo
-        if (!faceEmbedding) {
-            console.log('Error: No face detected');
-            return res.status(400).json({
-                error: 'No face detected. Please upload a clear photo of the student\'s face.'
-            });
-        }
 
         // 4. Check if parent user already exists
         const existingUser = await User.findOne({ email: parentEmail.toLowerCase() });
@@ -126,7 +103,7 @@ const createStudent = async (req, res) => {
         await user.save();
         console.log('User saved successfully. ID:', user._id);
 
-        // 7. Create Student Profile with 128-d face embedding
+        // 7. Create Student Profile
         console.log('Saving Student profile to database...');
         const student = new Student({
             name,
@@ -140,10 +117,10 @@ const createStudent = async (req, res) => {
             year: req.body.year,
             semester: req.body.semester,
             pickupPoint: req.body.pickupPoint,
-            busId: routeId, // Mapping routeId to busId as per schema
-            faceEmbedding, // 128-d array for attendance system
+            busId: routeId,
             parentId: user._id
         });
+
         await student.save();
         console.log('Student profile saved successfully. ID:', student._id);
 
@@ -160,9 +137,9 @@ const createStudent = async (req, res) => {
                 name: student.name,
                 email: student.email,
                 phone: student.phone,
-                faceEmbeddingLength: faceEmbedding.length, // Confirm 128
             }
         });
+
     } catch (err) {
         console.error('Registration error:', err);
         res.status(500).json({ error: 'Server Error during student registration' });
@@ -195,15 +172,7 @@ const updateStudent = async (req, res) => {
         student.pickupPoint = req.body.pickupPoint || student.pickupPoint;
         student.busId = routeId || student.busId;
 
-        // 2. Update Face Embedding if new image is provided
-        if (imageBase64) {
-            console.log('New photo provided, re-extracting face embedding...');
-            const faceEmbedding = await extractFaceEmbedding(imageBase64);
-            if (!faceEmbedding) {
-                return res.status(400).json({ error: 'No face detected in new photo' });
-            }
-            student.faceEmbedding = faceEmbedding;
-        }
+
 
         await student.save();
 
