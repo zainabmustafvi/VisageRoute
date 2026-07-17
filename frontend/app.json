@@ -13,9 +13,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "infoPlist": {
-        "NSCameraUsageDescription": "VisageRoute needs camera access to scan faces for attendance."
-      },
+      "infoPlist": {},
       "bundleIdentifier": "com.hassan-bilal-dev.frontend"
     },
     "android": {
@@ -26,8 +24,6 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.POST_NOTIFICATIONS"
@@ -41,18 +37,6 @@
     },
     "plugins": [
       "expo-font",
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow VisageRoute to use the camera for face attendance verification."
-        }
-      ],
-      [
-        "react-native-vision-camera",
-        {
-          "cameraPermissionText": "VisageRoute needs camera access to scan faces for attendance."
-        }
-      ],
       [
         "expo-location",
         {
@@ -80,3 +64,4 @@
     ]
   }
 }
+
