@@ -259,12 +259,16 @@ const createDriver = async (req, res) => {
         const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
         // 3. Create User Account
+        // IMPORTANT: Do NOT use legacy/static userId as a unique identity.
+        // Identity is enforced by email + password; user._id is the stable key.
         const user = new User({
+            // Keep legacy field for display only, but do not assume uniqueness.
             userId: generatedUserId,
             email: email.toLowerCase(),
             password: hashedPassword,
             role: 'driver'
         });
+
         await user.save();
 
         // 4. Create Driver Profile

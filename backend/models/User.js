@@ -1,10 +1,11 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
+    // Legacy/non-unique userId for display only.
+    // Identity must be enforced via email + password.
     userId: {
         type: String,
         required: true,
-        unique: true,
         trim: true,
     },
     email: {
