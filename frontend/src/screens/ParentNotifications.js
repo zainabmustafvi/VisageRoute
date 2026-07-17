@@ -11,8 +11,8 @@ import { API_BASE_URL } from '../config/api';
 const ParentNotifications = ({ navigation }) => {
     const [arrivalNotify, setArrivalNotify] = useState(true);
     const [startNotify, setStartNotify] = useState(true);
-    const [onBoardNotify, setOnBoardNotify] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
+
 
     const fetchPreferences = async () => {
         try {
@@ -22,13 +22,13 @@ const ParentNotifications = ({ navigation }) => {
             });
             setArrivalNotify(res.data.arrival_notify);
             setStartNotify(res.data.start_notify);
-            setOnBoardNotify(res.data.onboard_notify);
         } catch (error) {
             console.error('Error fetching preferences:', error);
         } finally {
             setIsLoading(false);
         }
     };
+
 
     const handleToggle = async (key, val, setter) => {
         // Optimistic UI update
@@ -119,15 +119,7 @@ const ParentNotifications = ({ navigation }) => {
                             onToggle={(val) => handleToggle('start_notify', val, setStartNotify)}
                             color="#3b82f6"
                         />
-                        <View style={styles.divider} />
-                        <SettingItem 
-                            icon="child-care" 
-                            title="On Board Child Notification" 
-                            subtitle="Know when child is on board" 
-                            value={onBoardNotify} 
-                            onToggle={(val) => handleToggle('onboard_notify', val, setOnBoardNotify)}
-                            color="#22c55e"
-                        />
+
                     </View>
                 </View>
 

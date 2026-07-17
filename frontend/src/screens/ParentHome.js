@@ -22,6 +22,7 @@ const ParentHome = ({ navigation }) => {
     const [selectedStudentId, setSelectedStudentId] = useState(null);
     const [childStatus, setChildStatus] = useState(null);
     const socketRef = useRef(null);
+
     // Ref mirrors selectedStudentId so socket callback always reads the latest value
     const selectedStudentIdRef = useRef(null);
 
@@ -66,14 +67,13 @@ const ParentHome = ({ navigation }) => {
                 });
 
                 unsubOpened = messaging().onNotificationOpenedApp((remoteMessage) => {
-                    if (remoteMessage.data?.type === 'child_boarded') {
-                        navigation.navigate('ParentHome');
-                    } else if (remoteMessage.data?.type === 'bus_arriving') {
+                    if (remoteMessage.data?.type === 'bus_arriving') {
                         navigation.navigate('ParentTrackBus', { studentId: selectedStudentIdRef.current });
                     } else if (remoteMessage.data?.type === 'trip_started') {
                         navigation.navigate('ParentTrackBus', { studentId: selectedStudentIdRef.current });
                     }
                 });
+
 
                 unsubMessage = messaging().onMessage(async (remoteMessage) => {
                     await Notifications.scheduleNotificationAsync({
@@ -180,44 +180,7 @@ const ParentHome = ({ navigation }) => {
                 });
             });
 
-            // Listen for child_boarded event
-            socket.on('child_boarded', (data) => {
-                console.log('[ParentHome Socket] child_boarded received:', data);
-                setChildStatus(prev => {
-                    if (!prev) return prev;
-                    return {
-                        ...prev,
-                        attendance: {
-                            status: 'boarded',
-                            boardingTime: data.boardingTime || new Date(),
-                            alightingTime: null,
-                        }
-                    };
-                });
-            });
 
-            // Listen for attendance updates — use ref to avoid stale closure
-            socket.on('attendanceUpdate', (data) => {
-                const activeId = selectedStudentIdRef.current;
-                const matchesChild =
-                    !data.studentId ||
-                    !activeId ||
-                    data.studentId === activeId ||
-                    data.studentId === activeId?.toString();
-
-                console.log('[ParentHome Socket] attendanceUpdate received:', data);
-
-                if (matchesChild) {
-                    setChildStatus(prev => ({
-                        ...prev,
-                        attendance: {
-                            status: data.status || 'boarded',
-                            boardingTime: data.boardingTime || data.time,
-                            alightingTime: null,
-                        },
-                    }));
-                }
-            });
 
             // Listen for real-time bus location updates (new bus room event)
             socket.on('bus_location_update', (data) => {
