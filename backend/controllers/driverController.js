@@ -7,9 +7,10 @@ const Student = require('../models/Student');
 // @access  Private/Driver
 const getAssignedRoute = async (req, res) => {
     try {
-        const driver = await Driver.findOne({ userId: req.user.id });
+        const driver = await Driver.findOne({ user: req.user.id }).populate('user');
 
         if (!driver) {
+
             return res.status(404).json({ error: 'Driver profile not found.' });
         }
 
