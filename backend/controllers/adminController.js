@@ -24,14 +24,19 @@ const generatePassword = (length = 10) => {
 
 // Helper to generate the next Driver ID (DR + number)
 const generateDriverId = async () => {
-    const lastDriver = await Driver.findOne({ userId: /^DR\d+$/ })
-        .sort({ userId: -1 }); // Sort by userId descending to get the highest number
-    
-    if (!lastDriver) return 'DR1001'; // Start from 1001 if no drivers exist
-    
-    const lastId = lastDriver.userId.replace('DR', '');
-    const nextNumber = parseInt(lastId) + 1;
-    return `DR${nextNumber}`;
+    // Find any driver that has a userId matching legacy pattern
+    const allDrivers = await Driver.find({ userId: { $exists: true, $ne: null } })
+        .sort({ createdAt: -1 })
+        .limit(20);
+
+    let highest = 1000;
+    for (const d of allDrivers) {
+        if (d.userId && /^DR\d+$/.test(d.userId)) {
+            const num = parseInt(d.userId.replace('DR', ''));
+            if (num > highest) highest = num;
+        }
+    }
+    return `DR${highest + 1}`;
 };
 
 // --- STUDENT CONTROLLERS ---
@@ -124,10 +129,9 @@ const createStudent = async (req, res) => {
         await student.save();
         console.log('Student profile saved successfully. ID:', student._id);
 
-        // 8. Send credentials email
-        console.log('Sending registration email...');
-        const emailSent = await sendRegistrationEmail(parentEmail, parentName, parentEmail, plainPassword);
-        console.log('Email sent status:', emailSent);
+        // 8. Send credentials email — FIRE AND FORGET (do NOT await, prevents 499 timeout)
+        sendRegistrationEmail(parentEmail, parentName, parentEmail, plainPassword)
+            .catch(err => console.error('Parent registration email failed:', err.message));
 
         console.log('--- Student Registration Completed Successfully ---');
         res.status(201).json({
@@ -288,10 +292,10 @@ const createDriver = async (req, res) => {
 
         await user.save();
 
-        // 4. Create Driver Profile
+        // 4. Create Driver Profile (with user ObjectId link for modern lookups)
         const driver = new Driver({
             name,
-            email,
+            email: email.toLowerCase(),
             phone,
             employeeId,
             address,
@@ -299,6 +303,7 @@ const createDriver = async (req, res) => {
             licenseClass,
             licenseExpiry,
             userId: generatedUserId,
+            user: user._id,  // Link to User account
             assignedBusId: assignedBusId || null
         });
         await driver.save();
@@ -308,13 +313,9 @@ const createDriver = async (req, res) => {
             await Bus.findByIdAndUpdate(assignedBusId, { driverId: driver._id });
         }
 
-        // 6. Send Credentials to driver's email
-        // NEW TRY-CATCH BLOCK: Prevents SMTP timeout crashes from breaking the registration flow.
-       try {
-            await sendRegistrationEmail(email, name, email, plainPassword);
-        } catch (emailError) {
-            console.error('Email failed to send but driver registration was successful:', emailError);
-        }
+        // 6. Send Credentials to driver's email — FIRE AND FORGET (no await — prevents 499 timeout)
+        sendRegistrationEmail(email, name, email, plainPassword)
+            .catch(emailError => console.error('Driver email failed (non-critical):', emailError.message));
 
         res.status(201).json({
             message: 'Driver registered successfully',

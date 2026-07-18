@@ -1,33 +1,45 @@
 const { z } = require('zod');
 
-// Schema for creating/updating a student
-const studentSchema = z.object({
-    name: z.string().min(2, "Name must be at least 2 characters").max(100, "Name cannot exceed 100 characters").trim(),
+// Schema for creating a student (strict — all required fields must be present)
+const studentCreateSchema = z.object({
+    name: z.string().min(2, "Name must be at least 2 characters").max(100).trim(),
     email: z.string().email("Invalid email format"),
-    phone: z.string().min(10).max(15).trim(),
-    address: z.string().min(5, "Address must be at least 5 characters").trim(),
+    phone: z.string().min(7).max(15).trim(),
+    address: z.string().min(2, "Address is required").trim(),
     parentName: z.string().min(2, "Parent name is required").trim(),
     parentEmail: z.string().email("Invalid parent email format"),
     department: z.string().optional(),
     routeId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
-    parentId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(), // Optional now because we create it automatically
-    imageBase64: z.string().min(10, "A valid image is required"), // Added for biometric registration
-    faceEmbedding: z.array(z.number()).length(128).optional(),
+    parentId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
+    // imageBase64 is optional for normal registration; only needed for biometric enrolment
+    imageBase64: z.string().min(10).optional(),
+    faceEmbedding: z.array(z.number()).optional(),
     busId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
+    rollNo: z.string().optional(),
+    year: z.string().optional(),
+    semester: z.string().optional(),
+    pickupPoint: z.string().optional(),
 });
 
-// Schema for creating/updating a driver
-const driverSchema = z.object({
+// Schema for updating a student — all fields optional
+const studentSchema = studentCreateSchema.partial();
+
+// Schema for creating a driver (strict)
+const driverCreateSchema = z.object({
     name: z.string().min(2).max(100).trim(),
     email: z.string().email("Invalid email format"),
-    phone: z.string().min(10).max(15).trim(),
+    phone: z.string().min(7).max(15).trim(),
     employeeId: z.string().min(3).trim(),
     address: z.string().optional(),
     licenseNumber: z.string().min(5).max(20).trim(),
     licenseClass: z.enum(['Class A', 'Class B', 'Class C']),
-    licenseExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expiry must be in YYYY-MM-DD format"),
+    // Accept YYYY-MM-DD or any ISO date string (the frontend may send full ISO)
+    licenseExpiry: z.string().min(1, "License expiry is required"),
     assignedBusId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
 });
+
+// Schema for updating a driver — all fields optional
+const driverSchema = driverCreateSchema.partial();
 
 const busSchema = z.object({
     busNumber: z.string().min(1, "Bus number is required").trim(),
@@ -43,7 +55,7 @@ const busSchema = z.object({
 const busRouteSchema = z.object({
     routeName: z.string().min(3).max(50).trim(),
     driverId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
-    capacity: z.number().int().positive().max(100, "Capacity cannot exceed 100"),
+    capacity: z.number().int().positive().max(100, "Capacity cannot exceed 100").optional(),
     schedule: z.object({
         departureTime: z.string().optional(),
         estimatedArrivalTime: z.string().optional(),
@@ -55,13 +67,11 @@ const busRouteSchema = z.object({
 const validateSchema = (schema) => {
     return (req, res, next) => {
         try {
-            // Parse and strictly validate the request body
             schema.parse(req.body);
             next();
         } catch (error) {
             if (error instanceof z.ZodError || error.name === 'ZodError' || (error.constructor && error.constructor.name === 'ZodError')) {
                 const issues = error.issues || error.errors || [];
-                // Return 400 Bad Request with formatted error details
                 const errorMessages = issues.map((err) => ({
                     field: err.path ? err.path.join('.') : '',
                     message: err.message,
@@ -83,7 +93,9 @@ const loginSchema = z.object({
 
 module.exports = {
     studentSchema,
+    studentCreateSchema,
     driverSchema,
+    driverCreateSchema,
     busSchema,
     busRouteSchema,
     loginSchema,
