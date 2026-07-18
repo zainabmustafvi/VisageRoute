@@ -69,7 +69,7 @@ const login = async (req, res) => {
 
     // Keep existing sub-collection references intact using lowercase checks
     if (validated.role === 'driver') {
-      const driver = await Driver.findOne({ userId: user._id });
+      const driver = await Driver.findOne({ user: user._id });
       if (driver) {
         responseData.user.driverId = driver._id;
         responseData.user.assignedBusId = driver.assignedBusId;

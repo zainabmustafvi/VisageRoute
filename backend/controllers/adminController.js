@@ -299,6 +299,7 @@ const createDriver = async (req, res) => {
             licenseClass,
             licenseExpiry,
             userId: generatedUserId,
+            user: user._id,
             assignedBusId: assignedBusId || null
         });
         await driver.save();
@@ -798,7 +799,7 @@ const createAnnouncement = async (req, res) => {
         });
         console.log('Announcement saved to DB. ID:', announcement._id);
 
-        let query = { role: 'parent' };
+        let targetUsers = [];
 
         if (recipients.type !== 'all' && recipients.targetId) {
             const mongoose = require('mongoose');
@@ -807,7 +808,9 @@ const createAnnouncement = async (req, res) => {
             }
         }
 
-        if (recipients.type === 'route') {
+        if (recipients.type === 'all') {
+            targetUsers = await User.find({ role: { $in: ['parent', 'driver'] } }).select('userId email fcmToken notificationPreferences');
+        } else if (recipients.type === 'route') {
             // 1. Find all buses assigned to this route
             const BusRouteAssignment = require('../models/BusRouteAssignment');
             const assignments = await BusRouteAssignment.find({ routeId: recipients.targetId }).select('busId');
@@ -816,16 +819,38 @@ const createAnnouncement = async (req, res) => {
             // 2. Find students assigned to any of these buses
             const students = await Student.find({ busId: { $in: busIds } });
             const parentIds = students.map(s => s.parentId).filter(id => id);
-            query._id = { $in: parentIds };
+            
+            // 3. Find drivers assigned to any of these buses
+            const drivers = await Driver.find({ assignedBusId: { $in: busIds } });
+            const driverEmails = drivers.map(d => d.email).filter(e => e);
+            const driverUserIds = drivers.map(d => d.user).filter(id => id);
+
+            targetUsers = await User.find({
+                $or: [
+                    { _id: { $in: parentIds } },
+                    { _id: { $in: driverUserIds } },
+                    { email: { $in: driverEmails }, role: 'driver' }
+                ]
+            }).select('userId email fcmToken notificationPreferences');
         } else if (recipients.type === 'bus') {
             // Find students on this bus
             const students = await Student.find({ busId: recipients.targetId });
             const parentIds = students.map(s => s.parentId).filter(id => id);
-            query._id = { $in: parentIds };
+            
+            // Find drivers assigned to this bus
+            const drivers = await Driver.find({ assignedBusId: recipients.targetId });
+            const driverEmails = drivers.map(d => d.email).filter(e => e);
+            const driverUserIds = drivers.map(d => d.user).filter(id => id);
+
+            targetUsers = await User.find({
+                $or: [
+                    { _id: { $in: parentIds } },
+                    { _id: { $in: driverUserIds } },
+                    { email: { $in: driverEmails }, role: 'driver' }
+                ]
+            }).select('userId email fcmToken notificationPreferences');
         }
 
-        const targetUsers = await User.find(query).select('userId email fcmToken notificationPreferences');
-        
         let io;
         try {
             io = getIo();
@@ -839,54 +864,58 @@ const createAnnouncement = async (req, res) => {
             const AnnouncementDelivery = require('../models/AnnouncementDelivery');
 
             targetUsers.forEach(async (user) => {
-                // Socket.io real-time update
-                if (io) {
-                    try {
-                        io.to(user._id.toString()).emit('newAnnouncement', {
-                            id: announcement._id,
-                            title,
-                            content,
-                            priority,
-                            sentAt: announcement.sentAt
-                        });
-                    } catch (sockErr) {
-                        console.error('Socket newAnnouncement emit failed:', sockErr.message);
-                    }
-                }
-
-                // Firebase Cloud Messaging Push Notification
-                if (user.fcmToken) {
-                    try {
-                        await sendNotification(
-                            user.fcmToken,
-                            `📢 ${title}`,
-                            content,
-                            { 
-                                type: 'announcement', 
-                                announcementId: announcement._id.toString(),
-                                priority 
-                            }
-                        );
-
-                        // Save to announcementdeliveries
-                        await AnnouncementDelivery.create({
-                            announcementId: announcement._id,
-                            userId: user._id,
-                            status: 'sent'
-                        });
-                    } catch (fcmErr) {
-                        console.error(`FCM/Delivery log failed for user ${user._id}:`, fcmErr.message);
-                        // Save failed delivery
+                try {
+                    // Socket.io real-time update
+                    if (io) {
                         try {
+                            io.to(user._id.toString()).emit('newAnnouncement', {
+                                id: announcement._id,
+                                title,
+                                content,
+                                priority,
+                                sentAt: announcement.sentAt
+                            });
+                        } catch (sockErr) {
+                            console.error('Socket newAnnouncement emit failed:', sockErr.message);
+                        }
+                    }
+
+                    // Firebase Cloud Messaging Push Notification
+                    if (user.fcmToken) {
+                        try {
+                            await sendNotification(
+                                user.fcmToken,
+                                `📢 ${title}`,
+                                content,
+                                { 
+                                    type: 'announcement', 
+                                    announcementId: announcement._id.toString(),
+                                    priority 
+                                }
+                            );
+
+                            // Save to announcementdeliveries
                             await AnnouncementDelivery.create({
                                 announcementId: announcement._id,
                                 userId: user._id,
-                                status: 'failed'
+                                status: 'sent'
                             });
-                        } catch (logErr) {
-                            console.error('Saving failed delivery log failed:', logErr.message);
+                        } catch (fcmErr) {
+                            console.error(`FCM/Delivery log failed for user ${user._id}:`, fcmErr.message);
+                            // Save failed delivery
+                            try {
+                                await AnnouncementDelivery.create({
+                                    announcementId: announcement._id,
+                                    userId: user._id,
+                                    status: 'failed'
+                                });
+                            } catch (logErr) {
+                                console.error('Saving failed delivery log failed:', logErr.message);
+                            }
                         }
                     }
+                } catch (pushErr) {
+                    console.error(`Error processing push notification loop for user ${user._id}:`, pushErr);
                 }
             });
         }
@@ -894,7 +923,11 @@ const createAnnouncement = async (req, res) => {
         // Send via Email
         if (deliveryOptions.email) {
             targetUsers.forEach(user => {
-                sendAnnouncementEmail(user.email || user.userId, title, content, priority);
+                try {
+                    sendAnnouncementEmail(user.email || user.userId, title, content, priority);
+                } catch (emailErr) {
+                    console.error(`Email delivery failed to user ${user.email || user.userId}:`, emailErr);
+                }
             });
         }
 
