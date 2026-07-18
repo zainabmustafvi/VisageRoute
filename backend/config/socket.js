@@ -59,16 +59,23 @@ const initSocket = (server) => {
 
     io.use(async (socket, next) => {
         try {
-            const token = socket.handshake.auth.token;
+            let token = socket.handshake.auth?.token || 
+                        socket.handshake.headers?.authorization || 
+                        socket.handshake.headers?.['x-auth-token'];
+
+            if (token && token.startsWith('Bearer ')) {
+                token = token.slice(7);
+            }
+
             if (!token) return next(new Error('Authentication Error: Token missing'));
 
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            const userId = decoded.user ? decoded.user.id : decoded.id;
-            const user = await User.findById(userId).select('-password');
+            const id = decoded.id || decoded.userId || (decoded.user ? (decoded.user.id || decoded.user._id) : null);
+            const role = decoded.role || (decoded.user ? decoded.user.role : null);
 
-            if (!user) return next(new Error('Authentication Error: User not found'));
+            if (!id) return next(new Error('Authentication Error: Invalid token payload'));
 
-            socket.user = user;
+            socket.user = { id, role };
             next();
         } catch (err) {
             console.error('Socket Auth Error:', err.message);
@@ -77,17 +84,17 @@ const initSocket = (server) => {
     });
 
     io.on('connection', (socket) => {
-        const { _id, role } = socket.user;
-        console.log(`[Socket.io] Connected: ID=${socket.id} | UserID=${_id} | Role=${role}`);
+        const { id, role } = socket.user;
+        console.log(`[Socket.io] Connected: ID=${socket.id} | UserID=${id} | Role=${role}`);
 
-        socket.join(_id.toString());
+        socket.join(id.toString());
 
         // ── JOIN ROUTE ROOM (legacy) ─────────────────────────────────────────
         socket.on('joinRouteRoom', (routeId) => {
             const room = `route_${routeId}`;
             socket.join(room);
             socket.currentRoom = room;
-            console.log(`[Socket.io] ${role} ${_id} joined room: ${room}`);
+            console.log(`[Socket.io] ${role} ${id} joined room: ${room}`);
         });
 
         // ── DRIVER: JOIN BUS ROOM ────────────────────────────────────────────
@@ -101,7 +108,9 @@ const initSocket = (server) => {
         });
 
         // ── PARENT: SUBSCRIBE TO BUS ─────────────────────────────────────────
-        socket.on('subscribe_bus', ({ busID }) => {
+        socket.on('subscribe_bus', (data) => {
+            const busID = data?.busID || data?.busId;
+            if (!busID) return;
             const room = `bus_${busID}`;
             socket.join(room);
             socket.busRoom = room;
@@ -109,103 +118,125 @@ const initSocket = (server) => {
             console.log(`[Socket.io] Parent subscribed to bus room: ${room}`);
         });
 
-        // ── DRIVER: EMIT BUS LOCATION UPDATE ─────────────────────────────────
-        socket.on('bus_location_update', async (data) => {
+        // ── DRIVER: EMIT BUS LOCATION UPDATE (Unified) ───────────────────────
+        const handleLocationUpdate = async (data) => {
             if (role !== 'driver') {
                 socket.emit('error', { message: 'Unauthorized: Only drivers can emit location.' });
                 return;
             }
 
-            const { busID, latitude, longitude, speed, timestamp } = data;
+            const latitude = data.latitude !== undefined ? data.latitude : data.lat;
+            const longitude = data.longitude !== undefined ? data.longitude : data.lng;
+            const speed = data.speed || 0;
+            const timestamp = data.timestamp || new Date().toISOString();
 
-            // 1. Save to MongoDB
+            if (latitude === undefined || longitude === undefined) {
+                return;
+            }
+
             try {
-                const driver = await User.findById(_id);
                 const driverDoc = require('../models/Driver');
-                const driverRecord = await driverDoc.findOne({ userId: _id });
+                const driverRecord = await driverDoc.findOne({ user: id });
 
-                if (driverRecord) {
-                    await LocationTracking.create({
-                        busId: busID,
-                        driverId: driverRecord._id,
-                        latitude,
-                        longitude,
-                        speed: speed || 0,
-                        timestamp: timestamp ? new Date(timestamp) : new Date()
+                if (!driverRecord) {
+                    console.error('[Socket.io] Driver profile not found for user ID:', id);
+                    return;
+                }
+
+                const busID = data.busID || data.busId || driverRecord.assignedBusId;
+                if (!busID) {
+                    console.error('[Socket.io] No bus assigned to driver:', driverRecord._id);
+                    return;
+                }
+
+                // 1. Save to MongoDB
+                await LocationTracking.create({
+                    busId: busID,
+                    driverId: driverRecord._id,
+                    latitude,
+                    longitude,
+                    speed,
+                    timestamp: new Date(timestamp)
+                });
+
+                // 2. Calculate ETA using route stops
+                const eta = await calculateETA(busID, latitude, longitude);
+
+                // 3. Broadcast to all parents in this bus room
+                const room = `bus_${busID}`;
+                const broadcastData = {
+                    busID,
+                    busId: busID,
+                    latitude,
+                    longitude,
+                    speed,
+                    timestamp,
+                    eta
+                };
+
+                io.to(room).emit('location_changed', broadcastData);
+                io.to(room).emit('bus_location_update', broadcastData);
+
+                // Also broadcast to legacy route room if driver has one
+                if (socket.currentRoom) {
+                    io.to(socket.currentRoom).emit('locationUpdate', {
+                        driverLocation: { lat: latitude, lng: longitude },
+                        eta,
+                        timestamp,
                     });
+                }
+
+                // 4. CHECK ARRIVAL THRESHOLD for each parent on this bus
+                if (eta !== null && eta <= 5) {
+                    try {
+                        const Student = require('../models/Student');
+                        const Bus = require('../models/Bus');
+                        const { sendNotification } = require('../services/fcmService');
+
+                        const students = await Student.find({ 
+                            busId: busID
+                        }).populate({
+                            path: 'parentId',
+                            model: 'User',
+                            select: 'fcmToken notificationPreferences'
+                        });
+
+                        const bus = await Bus.findById(busID).select('busNumber');
+
+                        if (bus) {
+                            for (const student of students) {
+                                const parent = student.parentId;
+                                if (!parent?.fcmToken) continue;
+                                if (parent.notificationPreferences?.arrival_notify === false) continue;
+
+                                // Prevent duplicate arrival notifications
+                                const notifKey = `arrival_${busID}_${parent._id}_${new Date().toDateString()}`;
+                                if (sentArrivalNotifications.has(notifKey)) continue;
+                                sentArrivalNotifications.add(notifKey);
+
+                                await sendNotification(
+                                    parent.fcmToken,
+                                    '📍 Bus Arriving Soon',
+                                    `Bus #${bus.busNumber} is arriving at your pickup point in ~${eta} minutes.`,
+                                    { 
+                                        type: 'bus_arriving',
+                                        busID: busID.toString(),
+                                        etaMinutes: eta.toString()
+                                    }
+                                );
+                            }
+                        }
+                    } catch (arrErr) {
+                        console.error('[Socket.io] ETA check notification failed:', arrErr.message);
+                    }
                 }
             } catch (err) {
-                console.error('[Socket.io] Error saving location:', err.message);
+                console.error('[Socket.io] Error in location update handler:', err.message);
             }
+        };
 
-            // 2. Calculate ETA using route stops
-            const eta = await calculateETA(busID, latitude, longitude);
-
-            // 3. Broadcast to all parents in this bus room
-            const room = `bus_${busID}`;
-            io.to(room).emit('bus_location_update', {
-                busID,
-                latitude,
-                longitude,
-                speed: speed || 0,
-                timestamp: timestamp || new Date().toISOString(),
-                eta
-            });
-
-            // Also broadcast to legacy route room if driver has one
-            if (socket.currentRoom) {
-                io.to(socket.currentRoom).emit('locationUpdate', {
-                    driverLocation: { lat: latitude, lng: longitude },
-                    eta,
-                    timestamp: timestamp || new Date().toISOString(),
-                });
-            }
-
-            // 4. CHECK ARRIVAL THRESHOLD for each parent on this bus
-            if (eta !== null && eta <= 5) {
-                try {
-                    const Student = require('../models/Student');
-                    const Bus = require('../models/Bus');
-                    const { sendNotification } = require('../services/fcmService');
-
-                    const students = await Student.find({ 
-                        busId: busID
-                    }).populate({
-                        path: 'parentId',
-                        model: 'User',
-                        select: 'fcmToken notificationPreferences'
-                    });
-
-                    const bus = await Bus.findById(busID).select('busNumber');
-
-                    if (bus) {
-                        for (const student of students) {
-                            const parent = student.parentId;
-                            if (!parent?.fcmToken) continue;
-                            if (parent.notificationPreferences?.arrival_notify === false) continue;
-
-                            // Prevent duplicate arrival notifications
-                            const notifKey = `arrival_${busID}_${parent._id}_${new Date().toDateString()}`;
-                            if (sentArrivalNotifications.has(notifKey)) continue;
-                            sentArrivalNotifications.add(notifKey);
-
-                            await sendNotification(
-                                parent.fcmToken,
-                                '📍 Bus Arriving Soon',
-                                `Bus #${bus.busNumber} is arriving at your pickup point in ~${eta} minutes.`,
-                                { 
-                                    type: 'bus_arriving',
-                                    busID: busID.toString(),
-                                    etaMinutes: eta.toString()
-                                }
-                            );
-                        }
-                    }
-                } catch (arrErr) {
-                    console.error('[Socket.io] ETA check notification failed:', arrErr.message);
-                }
-            }
-        });
+        socket.on('bus_location_update', handleLocationUpdate);
+        socket.on('update_location', handleLocationUpdate);
 
         // ── DRIVER: END TRIP ─────────────────────────────────────────────────
         socket.on('trip_ended', ({ busID }) => {

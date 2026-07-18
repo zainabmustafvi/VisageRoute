@@ -52,7 +52,7 @@ const getStudentById = async (req, res) => {
         const student = await Student.findById(req.params.id)
             .populate('parentId', 'userId')
             .populate('busId', 'plateNumber');
-        
+
         if (!student) {
             return res.status(404).json({ error: 'Student not found' });
         }
@@ -229,7 +229,7 @@ const deleteStudent = async (req, res) => {
         // Note: In a production app, we might want to delete the Parent User as well
         // but only if they don't have other students. For now, we just delete the student.
         await Student.findByIdAndDelete(req.params.id);
-        
+
         res.json({ message: 'Student deleted successfully' });
     } catch (err) {
         console.error('Delete error:', err);
@@ -303,7 +303,7 @@ const createDriver = async (req, res) => {
             licenseClass,
             licenseExpiry,
             userId: generatedUserId,
-            user: user._id,  // Link to User account
+            user: user._id,
             assignedBusId: assignedBusId || null
         });
         await driver.save();
@@ -399,7 +399,7 @@ const deleteDriver = async (req, res) => {
             await Bus.findByIdAndUpdate(driver.assignedBusId, { driverId: null });
             driver.assignedBusId = null;
         }
-        
+
         await driver.save();
         res.json({ message: 'Driver deactivated successfully' });
     } catch (err) {
@@ -413,7 +413,7 @@ const deleteDriver = async (req, res) => {
 const getAvailableBuses = async (req, res) => {
     try {
         // Find buses where driverId is not set or null
-        const buses = await Bus.find({ 
+        const buses = await Bus.find({
             $or: [
                 { driverId: { $exists: false } },
                 { driverId: null }
@@ -470,9 +470,9 @@ const createBus = async (req, res) => {
         // Check for duplicate Bus Number
         const existingBusNum = await Bus.findOne({ busNumber });
         if (existingBusNum) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: `Bus with number ${busNumber} already exists.`,
-                existingBus: existingBusNum 
+                existingBus: existingBusNum
             });
         }
 
@@ -622,17 +622,17 @@ const createBusRoute = async (req, res) => {
 const updateRouteSchedule = async (req, res) => {
     try {
         const { departureTime, estimatedArrivalTime } = req.body;
-        
+
         const route = await BusRoute.findById(req.params.id);
         if (!route) {
             return res.status(404).json({ error: 'Route not found' });
         }
-        
+
         route.schedule = {
             departureTime: departureTime || route.schedule.departureTime,
             estimatedArrivalTime: estimatedArrivalTime || route.schedule.estimatedArrivalTime
         };
-        
+
         await route.save();
         res.json(route);
     } catch (err) {
@@ -750,7 +750,7 @@ const getRecentUploads = async (req, res) => {
             .populate('routeId', 'routeName')
             .sort({ createdAt: -1 })
             .limit(10);
-        
+
         res.json(uploads);
     } catch (err) {
         res.status(500).json({ error: 'Server Error' });
@@ -799,7 +799,7 @@ const createAnnouncement = async (req, res) => {
         });
         console.log('Announcement saved to DB. ID:', announcement._id);
 
-        let query = { role: 'parent' };
+        let targetUsers = [];
 
         if (recipients.type !== 'all' && recipients.targetId) {
             const mongoose = require('mongoose');
@@ -808,25 +808,49 @@ const createAnnouncement = async (req, res) => {
             }
         }
 
-        if (recipients.type === 'route') {
+        if (recipients.type === 'all') {
+            targetUsers = await User.find({ role: { $in: ['parent', 'driver'] } }).select('userId email fcmToken notificationPreferences');
+        } else if (recipients.type === 'route') {
             // 1. Find all buses assigned to this route
             const BusRouteAssignment = require('../models/BusRouteAssignment');
             const assignments = await BusRouteAssignment.find({ routeId: recipients.targetId }).select('busId');
             const busIds = [...new Set(assignments.map(a => a.busId.toString()))];
-            
+
             // 2. Find students assigned to any of these buses
             const students = await Student.find({ busId: { $in: busIds } });
             const parentIds = students.map(s => s.parentId).filter(id => id);
-            query._id = { $in: parentIds };
+
+            // 3. Find drivers assigned to any of these buses
+            const drivers = await Driver.find({ assignedBusId: { $in: busIds } });
+            const driverEmails = drivers.map(d => d.email).filter(e => e);
+            const driverUserIds = drivers.map(d => d.user).filter(id => id);
+
+            targetUsers = await User.find({
+                $or: [
+                    { _id: { $in: parentIds } },
+                    { _id: { $in: driverUserIds } },
+                    { email: { $in: driverEmails }, role: 'driver' }
+                ]
+            }).select('userId email fcmToken notificationPreferences');
         } else if (recipients.type === 'bus') {
             // Find students on this bus
             const students = await Student.find({ busId: recipients.targetId });
             const parentIds = students.map(s => s.parentId).filter(id => id);
-            query._id = { $in: parentIds };
+
+            // Find drivers assigned to this bus
+            const drivers = await Driver.find({ assignedBusId: recipients.targetId });
+            const driverEmails = drivers.map(d => d.email).filter(e => e);
+            const driverUserIds = drivers.map(d => d.user).filter(id => id);
+
+            targetUsers = await User.find({
+                $or: [
+                    { _id: { $in: parentIds } },
+                    { _id: { $in: driverUserIds } },
+                    { email: { $in: driverEmails }, role: 'driver' }
+                ]
+            }).select('userId email fcmToken notificationPreferences');
         }
 
-        const targetUsers = await User.find(query).select('userId email fcmToken notificationPreferences');
-        
         let io;
         try {
             io = getIo();
@@ -840,54 +864,58 @@ const createAnnouncement = async (req, res) => {
             const AnnouncementDelivery = require('../models/AnnouncementDelivery');
 
             targetUsers.forEach(async (user) => {
-                // Socket.io real-time update
-                if (io) {
-                    try {
-                        io.to(user._id.toString()).emit('newAnnouncement', {
-                            id: announcement._id,
-                            title,
-                            content,
-                            priority,
-                            sentAt: announcement.sentAt
-                        });
-                    } catch (sockErr) {
-                        console.error('Socket newAnnouncement emit failed:', sockErr.message);
-                    }
-                }
-
-                // Firebase Cloud Messaging Push Notification
-                if (user.fcmToken) {
-                    try {
-                        await sendNotification(
-                            user.fcmToken,
-                            `📢 ${title}`,
-                            content,
-                            { 
-                                type: 'announcement', 
-                                announcementId: announcement._id.toString(),
-                                priority 
-                            }
-                        );
-
-                        // Save to announcementdeliveries
-                        await AnnouncementDelivery.create({
-                            announcementId: announcement._id,
-                            userId: user._id,
-                            status: 'sent'
-                        });
-                    } catch (fcmErr) {
-                        console.error(`FCM/Delivery log failed for user ${user._id}:`, fcmErr.message);
-                        // Save failed delivery
+                try {
+                    // Socket.io real-time update
+                    if (io) {
                         try {
+                            io.to(user._id.toString()).emit('newAnnouncement', {
+                                id: announcement._id,
+                                title,
+                                content,
+                                priority,
+                                sentAt: announcement.sentAt
+                            });
+                        } catch (sockErr) {
+                            console.error('Socket newAnnouncement emit failed:', sockErr.message);
+                        }
+                    }
+
+                    // Firebase Cloud Messaging Push Notification
+                    if (user.fcmToken) {
+                        try {
+                            await sendNotification(
+                                user.fcmToken,
+                                `📢 ${title}`,
+                                content,
+                                {
+                                    type: 'announcement',
+                                    announcementId: announcement._id.toString(),
+                                    priority
+                                }
+                            );
+
+                            // Save to announcementdeliveries
                             await AnnouncementDelivery.create({
                                 announcementId: announcement._id,
                                 userId: user._id,
-                                status: 'failed'
+                                status: 'sent'
                             });
-                        } catch (logErr) {
-                            console.error('Saving failed delivery log failed:', logErr.message);
+                        } catch (fcmErr) {
+                            console.error(`FCM/Delivery log failed for user ${user._id}:`, fcmErr.message);
+                            // Save failed delivery
+                            try {
+                                await AnnouncementDelivery.create({
+                                    announcementId: announcement._id,
+                                    userId: user._id,
+                                    status: 'failed'
+                                });
+                            } catch (logErr) {
+                                console.error('Saving failed delivery log failed:', logErr.message);
+                            }
                         }
                     }
+                } catch (pushErr) {
+                    console.error(`Error processing push notification loop for user ${user._id}:`, pushErr);
                 }
             });
         }
@@ -895,13 +923,17 @@ const createAnnouncement = async (req, res) => {
         // Send via Email
         if (deliveryOptions.email) {
             targetUsers.forEach(user => {
-                sendAnnouncementEmail(user.email || user.userId, title, content, priority);
+                try {
+                    sendAnnouncementEmail(user.email || user.userId, title, content, priority);
+                } catch (emailErr) {
+                    console.error(`Email delivery failed to user ${user.email || user.userId}:`, emailErr);
+                }
             });
         }
 
-        res.status(201).json({ 
-            message: 'Announcement sent successfully', 
-            recipientCount: targetUsers.length 
+        res.status(201).json({
+            message: 'Announcement sent successfully',
+            recipientCount: targetUsers.length
         });
 
     } catch (err) {
@@ -918,9 +950,9 @@ const getAdminStats = async (req, res) => {
         const busCount = await Bus.countDocuments();
         const studentCount = await Student.countDocuments();
         const driverCount = await Driver.countDocuments({ isActive: true });
-        
+
         // You could also calculate active trips here if needed
-        
+
         res.json({
             buses: busCount,
             students: studentCount,

@@ -83,7 +83,7 @@ const getAssignedRoute = async (req, res) => {
 // @access  Private/Driver
 const getDashboardData = async (req, res) => {
     try {
-        const driver = await findDriverForUser(req);
+        const driver = await Driver.findOne({ user: req.user.id }).populate('assignedBusId');
 
         if (!driver) {
             return res.status(404).json({ error: 'Driver profile not found. Please contact admin.' });
@@ -119,10 +119,15 @@ const updateTripStatus = async (req, res) => {
     try {
         const { isOnline } = req.body;
         const updateData = { isOnline };
-        if (isOnline) updateData.wentOnlineAt = new Date();
+        if (isOnline) {
+            updateData.wentOnlineAt = new Date();
+        }
+        const driver = await Driver.findOneAndUpdate(
+            { user: req.user.id },
+            updateData,
+            { new: true }
+        );
 
-        // Find first, then update by _id for reliability
-        const driver = await findDriverForUser(req);
         if (!driver) return res.status(404).json({ error: 'Driver not found' });
 
         const updated = await Driver.findByIdAndUpdate(driver._id, updateData, { new: true });
@@ -137,7 +142,7 @@ const updateTripStatus = async (req, res) => {
 // @access  Private/Driver
 const getProfile = async (req, res) => {
     try {
-        const driver = await findDriverForUser(req);
+        const driver = await Driver.findOne({ user: req.user.id }).populate('assignedBusId');
 
         if (!driver) {
             return res.status(404).json({ error: 'Driver profile not found. Please contact admin.' });
@@ -177,7 +182,7 @@ const startTrip = async (req, res) => {
 
         // Fallback: extract from token/profile if body is missing
         if (!driverID || !busID) {
-            const driver = await findDriverForUser(req);
+            const driver = await Driver.findOne({ user: req.user.id });
             if (driver) {
                 driverID = driverID || driver._id;
                 busID = busID || driver.assignedBusId;
@@ -254,7 +259,7 @@ const stopTrip = async (req, res) => {
         let { busID, driverID } = req.body;
 
         if (!driverID || !busID) {
-            const driver = await findDriverForUser(req);
+            const driver = await Driver.findOne({ user: req.user.id });
             if (driver) {
                 driverID = driverID || driver._id;
                 busID = busID || driver.assignedBusId;

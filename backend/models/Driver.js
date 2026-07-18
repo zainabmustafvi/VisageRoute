@@ -60,6 +60,11 @@ const driverSchema = new mongoose.Schema({
         required: false,
         sparse: true,
     },
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+    },
     assignedBusId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Bus',
