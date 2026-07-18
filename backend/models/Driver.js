@@ -47,10 +47,23 @@ const driverSchema = new mongoose.Schema({
         type: Date,
         required: true,
     },
+    // Legacy display-only field — not used for identity lookups
     userId: {
-        type: String, // format: DR + number
+        type: String,
+        required: false,
+        sparse: true,
+    },
+    // Modern reference: ObjectId link to the User account (optional for backward compat)
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: false,
+        sparse: true,
+    },
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
         required: true,
-        unique: true,
     },
     user: {
         type: mongoose.Schema.Types.ObjectId,
@@ -84,3 +97,4 @@ const driverSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('Driver', driverSchema);
+

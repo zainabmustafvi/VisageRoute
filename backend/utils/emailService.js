@@ -1,25 +1,30 @@
 const nodemailer = require('nodemailer');
 
+// Create a shared transporter with explicit timeouts to prevent hanging connections
+const createTransporter = () => nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'sandbox.smtp.mailtrap.io',
+    port: parseInt(process.env.SMTP_PORT || '2525'),
+    secure: process.env.SMTP_PORT == '465',
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
+    // Explicit timeouts to prevent Railway 499 (request timeout) errors
+    connectionTimeout: 8000,   // 8s to establish connection
+    greetingTimeout: 8000,     // 8s for SMTP greeting
+    socketTimeout: 10000,      // 10s for socket inactivity
+    tls: {
+        rejectUnauthorized: false
+    }
+});
+
 const sendRegistrationEmail = async (email, name, userId, password) => {
     try {
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT || '2525'),
-            secure: process.env.SMTP_PORT == '465',
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS,
-            },
-            tls: {
-                // Do not fail on invalid certs (common for testing/dev)
-                rejectUnauthorized: false
-            }
-        });
-
-        console.log('Attempting to send email via:', process.env.SMTP_HOST);
+        const transporter = createTransporter();
+        console.log('Attempting to send registration email via:', process.env.SMTP_HOST);
 
         const mailOptions = {
-            from: `"VisageRoute Admin" <noreply@visageroute.com>`, // Changed to a generic noreply address
+            from: `"VisageRoute Admin" <noreply@visageroute.com>`,
             to: email,
             subject: 'Your VisageRoute Registration Details',
             html: `
@@ -49,16 +54,7 @@ const sendRegistrationEmail = async (email, name, userId, password) => {
 
 const sendAnnouncementEmail = async (email, title, content, priority) => {
     try {
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT || '2525'),
-            secure: process.env.SMTP_PORT == '465',
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS,
-            },
-            tls: { rejectUnauthorized: false }
-        });
+        const transporter = createTransporter();
 
         const mailOptions = {
             from: `"VisageRoute Notifications" <noreply@visageroute.com>`,
@@ -82,4 +78,32 @@ const sendAnnouncementEmail = async (email, title, content, priority) => {
     }
 };
 
-module.exports = { sendRegistrationEmail, sendAnnouncementEmail };
+const sendPasswordResetEmail = async (email, resetCode) => {
+    try {
+        const transporter = createTransporter();
+
+        await transporter.sendMail({
+            from: '"VisageRoute" <noreply@visageroute.com>',
+            to: email,
+            subject: 'VisageRoute — Password Reset Code',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 400px; padding: 20px; border: 1px solid #e8e4ce; border-radius: 8px;">
+                    <h2 style="color: #f2cc0d; margin-bottom: 4px;">VisageRoute</h2>
+                    <p style="color: #1c190d;">Dear User,</p>
+                    <p style="color: #6b6651;">Your password reset verification code is:</p>
+                    <h1 style="letter-spacing: 6px; color: #1c190d; background: #f8f8f5; text-align: center; padding: 12px; border-radius: 4px;">
+                        ${resetCode}
+                    </h1>
+                    <p style="font-size: 12px; color: #ef4444;">This code expires in 15 minutes.</p>
+                </div>
+            `
+        });
+        console.log('✅ Password reset email sent to:', email);
+        return true;
+    } catch (error) {
+        console.error('❌ Password Reset Email Error:', error.message);
+        return false;
+    }
+};
+
+module.exports = { sendRegistrationEmail, sendAnnouncementEmail, sendPasswordResetEmail };

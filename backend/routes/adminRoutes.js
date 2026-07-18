@@ -39,8 +39,10 @@ const { protect } = require('../middleware/authMiddleware');
 const { authorizeRoles } = require('../middleware/roleMiddleware');
 const { 
     validateSchema, 
-    studentSchema, 
+    studentSchema,
+    studentCreateSchema,
     driverSchema, 
+    driverCreateSchema,
     busSchema,
     busRouteSchema 
 } = require('../validators/adminValidator');
@@ -78,20 +80,20 @@ router.use(authorizeRoles('admin'));
 // Student Routes
 router.route('/students')
     .get(getStudents)
-    .post(validateSchema(studentSchema), createStudent);
+    .post(validateSchema(studentCreateSchema), createStudent);
 
 router.route('/students/:id')
     .get(getStudentById)
-    .put(validateSchema(studentSchema.partial()), updateStudent) // Use partial schema for updates
+    .put(validateSchema(studentSchema), updateStudent) // studentSchema is already .partial()
     .delete(deleteStudent);
 
 // Driver Routes
 router.route('/drivers')
     .get(getDrivers)
-    .post(validateSchema(driverSchema), createDriver);
+    .post(validateSchema(driverCreateSchema), createDriver);
 
 router.route('/drivers/:id')
-    .put(validateSchema(driverSchema.partial()), updateDriver)
+    .put(validateSchema(driverSchema), updateDriver) // driverSchema is already .partial()
     .delete(deleteDriver);
 
 // Bus (Vehicle) Routes
