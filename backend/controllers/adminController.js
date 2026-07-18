@@ -819,7 +819,7 @@ const createAnnouncement = async (req, res) => {
             // 2. Find students assigned to any of these buses
             const students = await Student.find({ busId: { $in: busIds } });
             const parentIds = students.map(s => s.parentId).filter(id => id);
-
+            
             // 3. Find drivers assigned to any of these buses
             const drivers = await Driver.find({ assignedBusId: { $in: busIds } });
             const driverEmails = drivers.map(d => d.email).filter(e => e);
@@ -836,7 +836,7 @@ const createAnnouncement = async (req, res) => {
             // Find students on this bus
             const students = await Student.find({ busId: recipients.targetId });
             const parentIds = students.map(s => s.parentId).filter(id => id);
-
+            
             // Find drivers assigned to this bus
             const drivers = await Driver.find({ assignedBusId: recipients.targetId });
             const driverEmails = drivers.map(d => d.email).filter(e => e);
@@ -887,10 +887,10 @@ const createAnnouncement = async (req, res) => {
                                 user.fcmToken,
                                 `📢 ${title}`,
                                 content,
-                                {
-                                    type: 'announcement',
+                                { 
+                                    type: 'announcement', 
                                     announcementId: announcement._id.toString(),
-                                    priority
+                                    priority 
                                 }
                             );
 

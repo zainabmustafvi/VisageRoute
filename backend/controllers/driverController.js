@@ -84,7 +84,7 @@ const getAssignedRoute = async (req, res) => {
 const getDashboardData = async (req, res) => {
     try {
         const driver = await Driver.findOne({ user: req.user.id }).populate('assignedBusId');
-
+        
         if (!driver) {
             return res.status(404).json({ error: 'Driver profile not found. Please contact admin.' });
         }
