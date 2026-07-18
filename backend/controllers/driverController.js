@@ -53,7 +53,7 @@ const getAssignedRoute = async (req, res) => {
 // @access  Private/Driver
 const getDashboardData = async (req, res) => {
     try {
-        const driver = await Driver.findOne({ userId: req.user.id }).populate('assignedBusId');
+        const driver = await Driver.findOne({ user: req.user.id }).populate('assignedBusId');
         
         if (!driver) {
             return res.status(404).json({ error: 'Driver not found' });
@@ -88,7 +88,7 @@ const updateTripStatus = async (req, res) => {
             updateData.wentOnlineAt = new Date();
         }
         const driver = await Driver.findOneAndUpdate(
-            { userId: req.user.id },
+            { user: req.user.id },
             updateData,
             { new: true }
         );
@@ -106,7 +106,7 @@ const updateTripStatus = async (req, res) => {
 // @access  Private/Driver
 const getProfile = async (req, res) => {
     try {
-        const driver = await Driver.findOne({ userId: req.user.id }).populate('assignedBusId');
+        const driver = await Driver.findOne({ user: req.user.id }).populate('assignedBusId');
 
         if (!driver) {
             return res.status(404).json({ error: 'Driver profile not found.' });
@@ -141,7 +141,7 @@ const startTrip = async (req, res) => {
 
         // Fallback: extract from token if body is missing it
         if (!driverID || !busID) {
-            const driver = await Driver.findOne({ userId: req.user.id });
+            const driver = await Driver.findOne({ user: req.user.id });
             if (driver) {
                 driverID = driverID || driver._id;
                 busID = busID || driver.assignedBusId;
@@ -219,7 +219,7 @@ const stopTrip = async (req, res) => {
 
         // Fallback: extract from token if body is missing it
         if (!driverID || !busID) {
-            const driver = await Driver.findOne({ userId: req.user.id });
+            const driver = await Driver.findOne({ user: req.user.id });
             if (driver) {
                 driverID = driverID || driver._id;
                 busID = busID || driver.assignedBusId;

@@ -19,16 +19,25 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
 // @access  Private/Driver
 const updateLocation = async (req, res) => {
     try {
-        const { bus_id, latitude, longitude, speed, accuracy, timestamp } = req.body;
-        const driverId = req.user.id;
+        const { latitude, longitude, speed, accuracy, timestamp } = req.body;
 
-        if (!bus_id || !latitude || !longitude) {
+        if (latitude === undefined || longitude === undefined) {
             return res.status(400).json({ error: 'Missing required location fields' });
         }
 
+        const driver = await Driver.findOne({ user: req.user.id });
+        if (!driver) {
+            return res.status(404).json({ error: 'Driver profile not found' });
+        }
+        if (!driver.assignedBusId) {
+            return res.status(400).json({ error: 'No bus assigned to this driver' });
+        }
+
+        const bus_id = driver.assignedBusId;
+
         const newLocation = new LocationTracking({
             busId: bus_id,
-            driverId,
+            driverId: driver._id,
             latitude,
             longitude,
             speed,
