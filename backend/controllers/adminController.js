@@ -152,7 +152,10 @@ const createStudent = async (req, res) => {
 const updateStudent = async (req, res) => {
     try {
         const { name, email, phone, address, parentName, parentEmail, department, routeId, imageBase64 } = req.body;
-        const student = await Student.findById(req.params.id);
+        const mongoose = require('mongoose');
+        const studentId = mongoose.Types.ObjectId.isValid(req.params.id) ? req.params.id : null;
+        const student = studentId ? await Student.findById(studentId) : null;
+
 
         if (!student) {
             return res.status(404).json({ error: 'Student not found' });
@@ -172,21 +175,35 @@ const updateStudent = async (req, res) => {
         student.pickupPoint = req.body.pickupPoint || student.pickupPoint;
         student.busId = routeId || student.busId;
 
+        // If admin changed parentEmail, ensure the linked User email/legacy field updates.
+        // Also keep userId as non-unique legacy display only.
+        if (parentEmail && parentEmail !== student.parentEmail) {
+            student.parentEmail = parentEmail;
+        }
+
+
+
+
+
+
 
 
         await student.save();
 
-        // 3. Update Parent Info in User model if email changed
+        // 3. Update Parent Info in User model.
+        // Must link via MongoDB _id (student.parentId), not via legacy serial identifiers.
         if (parentEmail || parentName) {
             const user = await User.findById(student.parentId);
             if (user) {
                 if (parentEmail) {
+                    // userId is legacy display only (non-unique).
                     user.userId = parentEmail;
                     user.email = parentEmail.toLowerCase();
                 }
                 await user.save();
             }
         }
+
 
         res.json({ message: 'Student updated successfully', student });
     } catch (err) {
@@ -328,6 +345,7 @@ const updateDriver = async (req, res) => {
 
         // Check for conflicts if fields changed
         if (email && email !== driver.email) {
+
             const existing = await Driver.findOne({ email });
             if (existing) return res.status(400).json({ error: 'Email already exists' });
         }
