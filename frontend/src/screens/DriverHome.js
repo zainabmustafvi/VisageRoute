@@ -47,10 +47,11 @@ const DriverHome = ({ navigation }) => {
 
     const fetchDashboardData = async () => {
         try {
-            const token = await SecureStore.getItemAsync('socketToken');
+            const token = await SecureStore.getItemAsync('userToken');
             const response = await axios.get(`${API_BASE_URL}/api/driver/dashboard`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+
             setDriverData(response.data);
             setTripActive(response.data.isOnline);
             setLoading(false);
@@ -62,7 +63,12 @@ const DriverHome = ({ navigation }) => {
 
     const updateTripStatusOnServer = async (isOnline) => {
         try {
-            const token = await SecureStore.getItemAsync('socketToken');
+            const token = await SecureStore.getItemAsync('userToken');
+            if (!token) {
+                console.error('Driver token missing. Skipping trip status update to prevent unauthenticated request.');
+                return;
+            }
+
             const endpoint = isOnline ? 'start-trip' : 'stop-trip';
             await axios.patch(`${API_BASE_URL}/api/driver/${endpoint}`, {
                 busID: driverData.assignedBusId,
@@ -73,16 +79,18 @@ const DriverHome = ({ navigation }) => {
         } catch (error) {
             console.error('Error updating trip status:', error);
         }
+
     };
 
     const connectSocket = async () => {
         setConnecting(true);
-        const token = await SecureStore.getItemAsync('socketToken');
+        const token = await SecureStore.getItemAsync('userToken');
         if (!token) {
             Alert.alert('Session Error', 'Please log in again.');
             navigation.replace('Login');
             return;
         }
+
 
         const socket = io(SOCKET_URL, {
             auth: { token },
@@ -179,7 +187,14 @@ const DriverHome = ({ navigation }) => {
 
     const sendLocationToBackend = async (data) => {
         try {
-            const token = await SecureStore.getItemAsync('socketToken');
+            const token = await SecureStore.getItemAsync('userToken');
+
+            // Safety guard: do not send unauthenticated requests that trigger 401/redirect loops.
+            if (!token) {
+                console.error("Driver token missing. Skipping /api/location/update to prevent global 401 redirect loop.");
+                return;
+            }
+
             await axios.post(`${API_BASE_URL}/api/location/update`, data, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -188,6 +203,7 @@ const DriverHome = ({ navigation }) => {
             // If it failed due to network, cache it
             if (!error.response) await cacheLocation(data);
         }
+
     };
 
     const cacheLocation = async (data) => {
