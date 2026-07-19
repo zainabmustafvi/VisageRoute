@@ -128,9 +128,11 @@ const LoginScreen = ({ navigation }) => {
                     <Text style={styles.forgotText}>Forgot Password?</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={globalStyles.button} onPress={handleLogin}>
-                    <Text style={globalStyles.buttonText}>{loading ? 'Loading...' : 'Login'}</Text>
-                </TouchableOpacity>
+                <View style={styles.loginButtonWrapper}>
+                    <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+                        <Text style={styles.loginButtonText}>{loading ? 'Loading...' : 'Login'}</Text>
+                    </TouchableOpacity>
+                </View>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -138,6 +140,31 @@ const LoginScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     bgContainer: { backgroundColor: Theme.colors.backgroundLight },
+    loginButtonWrapper: {
+        position: 'absolute',
+        left: 24,
+        right: 24,
+        bottom: 24,
+        alignItems: 'center',
+    },
+    loginButton: {
+        backgroundColor: '#FACC15',
+        height: 56,
+        width: '100%',
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#FACC15',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    loginButtonText: {
+        color: '#000',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
     logoText: { fontSize: Theme.typography.sizes['4xl'], color: Theme.colors.brandGrey, textAlign: 'center', marginBottom: Theme.spacing.xl, fontWeight: '800' },
     errorText: { color: Theme.colors.error, textAlign: 'center', marginBottom: 12 },
     warningText: { color: 'orange', fontSize: 11, textAlign: 'center', marginBottom: 8 },

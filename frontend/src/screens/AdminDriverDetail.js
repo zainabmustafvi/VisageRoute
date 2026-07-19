@@ -97,12 +97,12 @@ const AdminDriverDetail = ({ navigation, route }) => {
 
     const handleDelete = () => {
         Alert.alert(
-            'Confirm Deactivation',
-            'Are you sure you want to deactivate this driver? They will no longer be able to log in.',
+            'Confirm Delete Driver',
+            'Are you sure you want to delete this driver account? They will no longer be able to log in.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 { 
-                    text: 'Deactivate', 
+                    text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
                         try {
@@ -112,7 +112,7 @@ const AdminDriverDetail = ({ navigation, route }) => {
                             });
                             navigation.goBack();
                         } catch (error) {
-                            Alert.alert('Error', 'Failed to deactivate driver');
+                            Alert.alert('Error', 'Failed to delete driver');
                         }
                     }
                 }
@@ -282,7 +282,7 @@ const AdminDriverDetail = ({ navigation, route }) => {
                         
                         <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
                             <MaterialCommunityIcons name="account-off-outline" size={20} color="#ef4444" />
-                            <Text style={styles.deleteButtonText}>Deactivate Driver</Text>
+                            <Text style={styles.deleteButtonText}>Delete Driver</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

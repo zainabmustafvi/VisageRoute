@@ -24,16 +24,20 @@ const ParentTrackBus = ({ route, navigation }) => {
     const [isLoading, setIsLoading] = useState(true);
     const socketRef = useRef(null);
 
-    const fetchStatus = async () => {
+    const fetchStatus = async (token) => {
         try {
-            const token = await SecureStore.getItemAsync('socketToken');
-            const res = await axios.get(`${API_BASE_URL}/api/parent/child-status?studentId=${studentId || ''}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await axios.get(
+                `${API_BASE_URL}/api/parent/child-status?studentId=${studentId || ''}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                }
+            );
             setChildStatus(res.data);
+
             if (res.data.routeInfo?.eta) {
                 setEta(res.data.routeInfo.eta);
             }
+
             // If driver is offline, load last known location from DB
             if (!res.data.routeInfo?.driverOnline && res.data.routeInfo?.latestLocation) {
                 setDriverLocation({
@@ -56,10 +60,18 @@ const ParentTrackBus = ({ route, navigation }) => {
         let hasJoinedBus = false;
 
         const setupTracking = async () => {
-            // 1. Fetch child status to get routeId and busId
-            await fetchStatus();
+            // 1) Assert token safety FIRST (prevents 401 -> redirect loops)
+            const token = await SecureStore.getItemAsync('userToken');
+            if (!token) {
+                Alert.alert('Session Error', 'Please log in again.');
+                navigation.replace('Login');
+                return;
+            }
 
-            // 2. Request location permission to show parent's own position
+            // 2) Fetch child status using the validated token
+            await fetchStatus(token);
+
+            // 3) Request location permission to show parent's own position
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status === 'granted') {
                 const loc = await Location.getCurrentPositionAsync({});
@@ -67,14 +79,6 @@ const ParentTrackBus = ({ route, navigation }) => {
                     lat: loc.coords.latitude,
                     lng: loc.coords.longitude,
                 });
-            }
-
-            // 3. Connect to socket with stored JWT
-            const token = await SecureStore.getItemAsync('socketToken');
-            if (!token) {
-                Alert.alert('Session Error', 'Please log in again.');
-                navigation.replace('Login');
-                return;
             }
 
             socket = io(SOCKET_URL, {
@@ -177,6 +181,7 @@ const ParentTrackBus = ({ route, navigation }) => {
         </View>
     );
 
+    // defaultRegion is currently unused, but kept for potential future map centering.
     const defaultRegion = {
         latitude: myLocation?.lat || 24.8607,
         longitude: myLocation?.lng || 67.0011,
