@@ -73,16 +73,20 @@ const AdminDriverDetail = ({ navigation, route }) => {
     const handleSave = async () => {
         try {
             setIsSaving(true);
-            const token = await SecureStore.getItemAsync('socketToken');
+            const token = await SecureStore.getItemAsync('socketToken') || await SecureStore.getItemAsync('userToken');
+            const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+            const cleanBusId = assignedBusId ? (typeof assignedBusId === 'object' ? String(assignedBusId._id || assignedBusId.id) : String(assignedBusId)) : null;
+
             const payload = {
                 name, email, phone, employeeId, address,
                 licenseNumber, licenseClass, licenseExpiry,
-                assignedBusId: assignedBusId || null
+                assignedBusId: cleanBusId,
+                busId: cleanBusId
             };
 
-            await axios.put(`${API_BASE_URL}/api/admin/drivers/${paramId}`, payload, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await axios.put(`${API_BASE_URL}/api/admin/drivers/${paramId}`, payload, { headers });
+            await axios.post(`${API_BASE_URL}/api/admin/assign-bus-driver`, { driverId: paramId, busId: cleanBusId }, { headers }).catch(() => {});
 
             Alert.alert('Success', 'Driver updated successfully', [
                 { text: 'OK', onPress: () => navigation.goBack() }
@@ -232,7 +236,10 @@ const AdminDriverDetail = ({ navigation, route }) => {
                                 <MaterialCommunityIcons name="bus-side" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <Picker
                                     selectedValue={assignedBusId}
-                                    onValueChange={(v) => setAssignedBusId(v)}
+                                    onValueChange={(v) => {
+                                        const cleanVal = v ? (typeof v === 'object' ? String(v._id || v.id || '') : String(v)) : '';
+                                        setAssignedBusId(cleanVal);
+                                    }}
                                     style={styles.picker}
                                 >
                                     <Picker.Item label="Unassigned" value="" />

@@ -16,6 +16,7 @@ import { colors, typography, spacing } from '../theme/Theme';
 import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
+import * as SecureStore from 'expo-secure-store';
 
 const AdminStudentDetail = ({ navigation, route }) => {
   const { studentId: paramId } = route.params;
@@ -46,10 +47,15 @@ const AdminStudentDetail = ({ navigation, route }) => {
   const fetchInitialData = async () => {
     try {
       setIsLoading(true);
+      const token = await SecureStore.getItemAsync('socketToken') || await SecureStore.getItemAsync('userToken');
 
       const [studentRes, busesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/admin/students/${paramId}`),
-        axios.get(`${API_BASE_URL}/api/admin/buses`),
+        axios.get(`${API_BASE_URL}/api/admin/students/${paramId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        }),
+        axios.get(`${API_BASE_URL}/api/admin/buses`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        }),
       ]);
 
       const s = studentRes.data;
@@ -57,7 +63,7 @@ const AdminStudentDetail = ({ navigation, route }) => {
 
       setName(s.name || '');
       setDept(s.department || '');
-      setSelectedRoute(s.busId?._id || '');
+      setSelectedRoute(s.busId?._id || s.busId || '');
       setStudentId(s.rollNo || ''); // rollNo used for display
       setYear(s.year || '');
       setSemester(s.semester || '');
@@ -78,6 +84,11 @@ const AdminStudentDetail = ({ navigation, route }) => {
   const handleSave = async () => {
     try {
       setIsSaving(true);
+      const token = await SecureStore.getItemAsync('socketToken') || await SecureStore.getItemAsync('userToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const cleanBusId = selectedRoute ? (typeof selectedRoute === 'object' ? String(selectedRoute._id || selectedRoute.id) : String(selectedRoute)) : null;
+
       const payload = {
         name,
         email,
@@ -90,17 +101,19 @@ const AdminStudentDetail = ({ navigation, route }) => {
         year,
         semester,
         pickupPoint: pickup,
-        routeId: selectedRoute,
-        // imageBase64 intentionally removed (face/camera pipeline removed)
+        routeId: cleanBusId,
+        busId: cleanBusId,
       };
 
-      await axios.put(`${API_BASE_URL}/api/admin/students/${paramId}`, payload);
+      await axios.put(`${API_BASE_URL}/api/admin/students/${paramId}`, payload, { headers });
+      await axios.post(`${API_BASE_URL}/api/admin/assign-bus-student`, { studentId: paramId, busId: cleanBusId }, { headers }).catch(() => {});
+
       Alert.alert('Success', 'Student updated successfully', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err) {
-      console.error('Save error:', err);
-      Alert.alert('Error', 'Failed to update student');
+      console.error('Save error:', err.response?.data || err.message);
+      Alert.alert('Error', err.response?.data?.error || 'Failed to update student');
     } finally {
       setIsSaving(false);
     }
@@ -247,19 +260,22 @@ const AdminStudentDetail = ({ navigation, route }) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Assigned Route</Text>
+              <Text style={styles.inputLabel}>Assigned Bus</Text>
               <View style={styles.pickerWrapper}>
                 <MaterialCommunityIcons name="bus-side" size={20} color="#9ca3af" style={styles.inputIcon} />
                 <Picker
                   selectedValue={selectedRoute}
-                  onValueChange={(v) => setSelectedRoute(v)}
+                  onValueChange={(v) => {
+                    const cleanVal = v ? (typeof v === 'object' ? String(v._id || v.id || '') : String(v)) : '';
+                    setSelectedRoute(cleanVal);
+                  }}
                   style={styles.picker}
                 >
-                  <Picker.Item label="Select Route" value="" />
+                  <Picker.Item label="Unassigned / Select Bus" value="" />
                   {buses.map((bus) => (
                     <Picker.Item
                       key={bus._id}
-                      label={`${bus.plateNumber} (${bus.busType})`}
+                      label={`Bus #${bus.busNumber || 'N/A'} (${bus.plateNumber || 'No Plate'})`}
                       value={bus._id}
                     />
                   ))}
