@@ -129,6 +129,12 @@ const createStudent = async (req, res) => {
         await student.save();
         console.log('Student profile saved successfully. ID:', student._id);
 
+        // Update bus assignedStudents if busId provided
+        const initialBusId = routeId || req.body.busId;
+        if (initialBusId) {
+            await Bus.findByIdAndUpdate(initialBusId, { $addToSet: { assignedStudents: student._id } });
+        }
+
         // 8. Send credentials email — FIRE AND FORGET (do NOT await, prevents 499 timeout)
         sendRegistrationEmail(parentEmail, parentName, parentEmail, plainPassword)
             .catch(err => console.error('Parent registration email failed:', err.message));
@@ -177,20 +183,37 @@ const updateStudent = async (req, res) => {
         student.year = req.body.year || student.year;
         student.semester = req.body.semester || student.semester;
         student.pickupPoint = req.body.pickupPoint || student.pickupPoint;
-        student.busId = routeId || student.busId;
+
+        // Handle Bus Assignment Syncing
+        const requestedBusId = req.body.busId !== undefined ? req.body.busId : routeId;
+        if (requestedBusId !== undefined) {
+            let targetBusId = requestedBusId;
+            if (typeof targetBusId === 'object' && targetBusId !== null) {
+                targetBusId = targetBusId._id || targetBusId.id;
+            }
+            if (!targetBusId || targetBusId === '') {
+                targetBusId = null;
+            }
+
+            const oldBusId = student.busId ? student.busId.toString() : null;
+            const newBusId = targetBusId ? targetBusId.toString() : null;
+
+            if (oldBusId !== newBusId) {
+                if (oldBusId) {
+                    await Bus.findByIdAndUpdate(oldBusId, { $pull: { assignedStudents: student._id } });
+                }
+                if (newBusId) {
+                    await Bus.findByIdAndUpdate(newBusId, { $addToSet: { assignedStudents: student._id } });
+                }
+                student.busId = newBusId;
+            }
+        }
 
         // If admin changed parentEmail, ensure the linked User email/legacy field updates.
         // Also keep userId as non-unique legacy display only.
         if (parentEmail && parentEmail !== student.parentEmail) {
             student.parentEmail = parentEmail;
         }
-
-
-
-
-
-
-
 
         await student.save();
 
@@ -364,17 +387,30 @@ const updateDriver = async (req, res) => {
         driver.licenseClass = licenseClass || driver.licenseClass;
         driver.licenseExpiry = licenseExpiry || driver.licenseExpiry;
 
-        // Handle Bus Reassignment
-        if (assignedBusId !== undefined && assignedBusId !== driver.assignedBusId) {
-            // Unlink old bus if exists
-            if (driver.assignedBusId) {
-                await Bus.findByIdAndUpdate(driver.assignedBusId, { driverId: null });
+        // Handle Bus Reassignment with clean string ID parsing
+        if (assignedBusId !== undefined) {
+            let targetBusId = assignedBusId;
+            if (typeof targetBusId === 'object' && targetBusId !== null) {
+                targetBusId = targetBusId._id || targetBusId.id;
             }
-            // Link new bus if provided
-            if (assignedBusId) {
-                await Bus.findByIdAndUpdate(assignedBusId, { driverId: driver._id });
+            if (targetBusId === '') targetBusId = null;
+
+            const oldBusId = driver.assignedBusId ? driver.assignedBusId.toString() : null;
+            const newBusId = targetBusId ? targetBusId.toString() : null;
+
+            if (oldBusId !== newBusId) {
+                if (oldBusId) {
+                    await Bus.findByIdAndUpdate(oldBusId, { driverId: null });
+                }
+                if (newBusId) {
+                    await Driver.updateMany(
+                        { assignedBusId: newBusId, _id: { $ne: driver._id } },
+                        { assignedBusId: null }
+                    );
+                    await Bus.findByIdAndUpdate(newBusId, { driverId: driver._id });
+                }
+                driver.assignedBusId = newBusId;
             }
-            driver.assignedBusId = assignedBusId;
         }
 
         await driver.save();
@@ -963,6 +999,100 @@ const getAdminStats = async (req, res) => {
     }
 };
 
+// @desc    Assign or unassign bus to student
+// @route   POST /api/admin/assign-bus-student
+// @access  Private/Admin
+const assignBusStudent = async (req, res) => {
+    try {
+        const studentId = req.body.studentId || req.body.id;
+        let busId = req.body.busId !== undefined ? req.body.busId : req.body.routeId;
+
+        if (typeof busId === 'object' && busId !== null) {
+            busId = busId._id || busId.id;
+        }
+        if (busId === '') busId = null;
+
+        if (!studentId) {
+            return res.status(400).json({ error: 'studentId is required' });
+        }
+
+        const student = await Student.findById(studentId);
+        if (!student) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+
+        const oldBusId = student.busId ? student.busId.toString() : null;
+        const newBusId = busId ? busId.toString() : null;
+
+        if (oldBusId !== newBusId) {
+            if (oldBusId) {
+                await Bus.findByIdAndUpdate(oldBusId, { $pull: { assignedStudents: student._id } });
+            }
+            if (newBusId) {
+                await Bus.findByIdAndUpdate(newBusId, { $addToSet: { assignedStudents: student._id } });
+            }
+            student.busId = newBusId;
+            await student.save();
+        }
+
+        const updatedStudent = await Student.findById(student._id)
+            .populate('parentId', 'userId')
+            .populate('busId', 'plateNumber busNumber');
+
+        res.json({ message: 'Student bus assignment updated successfully', student: updatedStudent });
+    } catch (err) {
+        console.error('Assign bus student error:', err);
+        res.status(500).json({ error: 'Server Error during bus assignment' });
+    }
+};
+
+// @desc    Assign or unassign bus to driver
+// @route   POST /api/admin/assign-bus-driver
+// @access  Private/Admin
+const assignBusDriver = async (req, res) => {
+    try {
+        const driverId = req.body.driverId || req.body.id;
+        let busId = req.body.busId !== undefined ? req.body.busId : req.body.assignedBusId;
+
+        if (typeof busId === 'object' && busId !== null) {
+            busId = busId._id || busId.id;
+        }
+        if (busId === '') busId = null;
+
+        if (!driverId) {
+            return res.status(400).json({ error: 'driverId is required' });
+        }
+
+        const driver = await Driver.findById(driverId);
+        if (!driver) {
+            return res.status(404).json({ error: 'Driver not found' });
+        }
+
+        const oldBusId = driver.assignedBusId ? driver.assignedBusId.toString() : null;
+        const newBusId = busId ? busId.toString() : null;
+
+        if (oldBusId !== newBusId) {
+            if (oldBusId) {
+                await Bus.findByIdAndUpdate(oldBusId, { driverId: null });
+            }
+            if (newBusId) {
+                await Driver.updateMany(
+                    { assignedBusId: newBusId, _id: { $ne: driver._id } },
+                    { assignedBusId: null }
+                );
+                await Bus.findByIdAndUpdate(newBusId, { driverId: driver._id });
+            }
+            driver.assignedBusId = newBusId;
+            await driver.save();
+        }
+
+        res.json({ message: 'Driver bus assignment updated successfully', driver });
+    } catch (err) {
+        console.error('Assign bus driver error:', err);
+        res.status(500).json({ error: 'Server Error during driver bus assignment' });
+    }
+};
+
 module.exports = {
     getAdminStats,
     getStudents,
@@ -987,5 +1117,6 @@ module.exports = {
     getScheduleTemplate,
     getRecentUploads,
     createAnnouncement,
-    getAdminStats
+    assignBusStudent,
+    assignBusDriver
 };

@@ -11,6 +11,16 @@ import Theme from '../theme/Theme';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 
+let MapView, Marker, Polyline;
+try {
+    const Maps = require('react-native-maps');
+    MapView = Maps.default || Maps.MapView || Maps;
+    Marker = Maps.Marker;
+    Polyline = Maps.Polyline;
+} catch (e) {
+    // Fallback if react-native-maps is not available in environment
+}
+
 const SOCKET_URL = API_BASE_URL;
 
 const ParentTrackBus = ({ route, navigation }) => {
@@ -23,6 +33,7 @@ const ParentTrackBus = ({ route, navigation }) => {
     const [connected, setConnected] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const socketRef = useRef(null);
+    const mapRef = useRef(null);
 
     const fetchStatus = async (token) => {
         try {
@@ -38,15 +49,18 @@ const ParentTrackBus = ({ route, navigation }) => {
                 setEta(res.data.routeInfo.eta);
             }
 
-            // If driver is offline, load last known location from DB
-            if (!res.data.routeInfo?.driverOnline && res.data.routeInfo?.latestLocation) {
+            // Load initial / last known location from REST API if available
+            if (res.data.routeInfo?.latestLocation?.latitude && res.data.routeInfo?.latestLocation?.longitude) {
                 setDriverLocation({
-                    lat: res.data.routeInfo.latestLocation.latitude,
-                    lng: res.data.routeInfo.latestLocation.longitude,
+                    latitude: Number(res.data.routeInfo.latestLocation.latitude),
+                    longitude: Number(res.data.routeInfo.latestLocation.longitude),
                 });
+            }
+
+            if (!res.data.routeInfo?.driverOnline) {
                 setTripStatus('Bus not currently active. Showing last known location.');
-            } else if (!res.data.routeInfo?.driverOnline) {
-                setTripStatus('Bus not currently active. Waiting for driver to start trip...');
+            } else {
+                setTripStatus('Bus is active!');
             }
         } catch (error) {
             console.error('Error fetching child status in tracking:', error);
@@ -60,24 +74,21 @@ const ParentTrackBus = ({ route, navigation }) => {
         let hasJoinedBus = false;
 
         const setupTracking = async () => {
-            // 1) Assert token safety FIRST (prevents 401 -> redirect loops)
-            const token = await SecureStore.getItemAsync('userToken');
+            const token = await SecureStore.getItemAsync('userToken') || await SecureStore.getItemAsync('socketToken');
             if (!token) {
                 Alert.alert('Session Error', 'Please log in again.');
                 navigation.replace('Login');
                 return;
             }
 
-            // 2) Fetch child status using the validated token
             await fetchStatus(token);
 
-            // 3) Request location permission to show parent's own position
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status === 'granted') {
                 const loc = await Location.getCurrentPositionAsync({});
                 setMyLocation({
-                    lat: loc.coords.latitude,
-                    lng: loc.coords.longitude,
+                    latitude: loc.coords.latitude,
+                    longitude: loc.coords.longitude,
                 });
             }
 
@@ -90,14 +101,12 @@ const ParentTrackBus = ({ route, navigation }) => {
                 console.log('[Parent Socket] Connected:', socket.id);
                 setConnected(true);
 
-                // Subscribe to bus room for real-time tracking
                 const busId = childStatus?.student?.busId;
                 if (busId && !hasJoinedBus) {
                     socket.emit('subscribe_bus', { busID: busId });
                     hasJoinedBus = true;
                 }
 
-                // Also join legacy route room for backward compatibility
                 if (childStatus?.routeInfo?.routeId) {
                     socket.emit('joinRouteRoom', childStatus.routeInfo.routeId);
                 }
@@ -108,30 +117,38 @@ const ParentTrackBus = ({ route, navigation }) => {
                 setTripStatus('Could not connect to server. Check your network.');
             });
 
-            // 4. Listen for live location updates from the driver (new bus room event)
             socket.on('bus_location_update', (data) => {
-                setDriverLocation({
-                    lat: data.latitude,
-                    lng: data.longitude,
-                });
-                setEta(data.eta);
+                const lat = data.latitude !== undefined ? data.latitude : data.lat;
+                const lng = data.longitude !== undefined ? data.longitude : data.lng;
+                if (lat && lng) {
+                    setDriverLocation({
+                        latitude: Number(lat),
+                        longitude: Number(lng),
+                    });
+                }
+                if (data.eta !== undefined) setEta(data.eta);
                 setTripStatus('Bus is on the way!');
             });
 
-            // 5. Listen for live location updates (legacy route room event)
-            socket.on('locationUpdate', ({ driverLocation: loc, eta: etaMin }) => {
-                setDriverLocation(loc);
-                setEta(etaMin);
+            socket.on('locationUpdate', (data) => {
+                const loc = data.driverLocation || data;
+                const lat = loc?.latitude !== undefined ? loc.latitude : loc?.lat;
+                const lng = loc?.longitude !== undefined ? loc.longitude : loc?.lng;
+                if (lat && lng) {
+                    setDriverLocation({
+                        latitude: Number(lat),
+                        longitude: Number(lng),
+                    });
+                }
+                if (data.eta !== undefined) setEta(data.eta);
                 setTripStatus('Bus is on the way!');
             });
 
-            // 6. Listen for trip completion (new bus room event)
-            socket.on('trip_ended', ({ busID }) => {
+            socket.on('trip_ended', () => {
                 setTripStatus('Trip has ended. The bus has arrived.');
                 setEta(null);
             });
 
-            // 7. Listen for trip completion (legacy route room event)
             socket.on('tripEnded', ({ message }) => {
                 setTripStatus(message || 'Trip has ended.');
                 setEta(null);
@@ -147,8 +164,36 @@ const ParentTrackBus = ({ route, navigation }) => {
         };
     }, [studentId]);
 
+    // Automatic Map Zoom & Fit
+    useEffect(() => {
+        if (myLocation && driverLocation) {
+            if (mapRef.current && typeof mapRef.current.fitToCoordinates === 'function') {
+                mapRef.current.fitToCoordinates(
+                    [
+                        { latitude: myLocation.latitude, longitude: myLocation.longitude },
+                        { latitude: driverLocation.latitude, longitude: driverLocation.longitude }
+                    ],
+                    {
+                        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+                        animated: true
+                    }
+                );
+            }
+        } else if (mapRef.current && typeof mapRef.current.animateToRegion === 'function') {
+            const singleLoc = myLocation || driverLocation;
+            if (singleLoc) {
+                mapRef.current.animateToRegion({
+                    latitude: singleLoc.latitude,
+                    longitude: singleLoc.longitude,
+                    latitudeDelta: 0.02,
+                    longitudeDelta: 0.02,
+                }, 1000);
+            }
+        }
+    }, [myLocation, driverLocation]);
+
     const handleCallDriver = () => {
-        const phone = childStatus?.driverInfo?.phone;
+        const phone = childStatus?.driverInfo?.phone || childStatus?.driverInfo?.contact || childStatus?.driver?.phone || childStatus?.driver?.contact;
         if (phone) {
             Linking.openURL(`tel:${phone}`);
         } else {
@@ -181,21 +226,16 @@ const ParentTrackBus = ({ route, navigation }) => {
         </View>
     );
 
-    // defaultRegion is currently unused, but kept for potential future map centering.
-    const defaultRegion = {
-        latitude: myLocation?.lat || 24.8607,
-        longitude: myLocation?.lng || 67.0011,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-    };
-
     const mapMarkers = [];
     if (driverLocation) {
-        mapMarkers.push({ coordinate: driverLocation, icon: 'bus' });
+        mapMarkers.push({ coordinate: driverLocation, icon: 'bus', title: 'Bus Location' });
     }
     if (myLocation) {
-        mapMarkers.push({ coordinate: myLocation, icon: 'home' });
+        mapMarkers.push({ coordinate: myLocation, icon: 'home', title: 'Parent Location' });
     }
+
+    const driverName = childStatus?.driverInfo?.name || childStatus?.driver?.name || 'Not assigned';
+    const driverPhone = childStatus?.driverInfo?.phone || childStatus?.driverInfo?.contact || childStatus?.driver?.phone || childStatus?.driver?.contact;
 
     if (isLoading) {
         return (
@@ -227,7 +267,7 @@ const ParentTrackBus = ({ route, navigation }) => {
                                 Bus #{childStatus?.student?.busNumber || 'N/A'}
                             </Text>
                             <Text style={styles.driverText}>
-                                Driver: {childStatus?.driverInfo?.name || 'Not assigned'}
+                                Driver: {driverName}{driverPhone ? ` (${driverPhone})` : ''}
                             </Text>
                         </View>
                     </View>
@@ -241,20 +281,54 @@ const ParentTrackBus = ({ route, navigation }) => {
             {/* Map Area */}
             <View style={styles.mapContainer}>
                 {Platform.OS === 'web' ? (
-                    <View style={styles.mapPlaceholder}>
-                        <MaterialIcons name="map" size={48} color={Theme.colors.textSecondaryLight} />
-                        <Text style={styles.overlayText}>Live Map is only available on Android/iOS devices.</Text>
-                    </View>
-                ) : (
-                    <>
-                        <LeafletMap markers={mapMarkers} />
-                        {!driverLocation && (
-                            <View style={styles.mapOverlay}>
-                                <ActivityIndicator size="large" color={Theme.colors.primary} />
-                                <Text style={styles.overlayText}>{tripStatus}</Text>
-                            </View>
+                    <LeafletMap markers={mapMarkers} />
+                ) : MapView ? (
+                    <MapView
+                        ref={mapRef}
+                        style={StyleSheet.absoluteFillObject}
+                        initialRegion={{
+                            latitude: myLocation?.latitude || driverLocation?.latitude || 24.8607,
+                            longitude: myLocation?.longitude || driverLocation?.longitude || 67.0011,
+                            latitudeDelta: 0.05,
+                            longitudeDelta: 0.05,
+                        }}
+                    >
+                        {myLocation && (
+                            <Marker
+                                coordinate={{ latitude: myLocation.latitude, longitude: myLocation.longitude }}
+                                title="Parent Location"
+                                description="Your current location"
+                                pinColor="blue"
+                            />
                         )}
-                    </>
+                        {driverLocation && (
+                            <Marker
+                                coordinate={{ latitude: driverLocation.latitude, longitude: driverLocation.longitude }}
+                                title="Bus Location"
+                                description={`Bus #${childStatus?.student?.busNumber || 'N/A'}`}
+                                pinColor="green"
+                            />
+                        )}
+                        {myLocation && driverLocation && (
+                            <Polyline
+                                coordinates={[
+                                    { latitude: myLocation.latitude, longitude: myLocation.longitude },
+                                    { latitude: driverLocation.latitude, longitude: driverLocation.longitude }
+                                ]}
+                                strokeColor="#3b82f6"
+                                strokeWidth={4}
+                            />
+                        )}
+                    </MapView>
+                ) : (
+                    <LeafletMap markers={mapMarkers} />
+                )}
+
+                {/* Status indicator chip if driver offline */}
+                {!childStatus?.routeInfo?.driverOnline && (
+                    <View style={styles.floatingBanner}>
+                        <Text style={styles.floatingBannerText}>{tripStatus}</Text>
+                    </View>
                 )}
                 
                 {/* Floating Map Controls */}
@@ -316,7 +390,7 @@ const ParentTrackBus = ({ route, navigation }) => {
                     <View style={styles.actionRow}>
                         <TouchableOpacity style={styles.callBtn} onPress={handleCallDriver}>
                             <MaterialIcons name="phone" size={20} color={Theme.colors.brandGrey} />
-                            <Text style={styles.callBtnText}>Call Driver</Text>
+                            <Text style={styles.callBtnText}>Call Driver {driverPhone ? `(${driverPhone})` : ''}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -329,20 +403,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: Theme.colors.backgroundLight,
-    },
-    headerWrapper: {
-        backgroundColor: Theme.colors.brandGrey,
-        paddingTop: Platform.OS === 'ios' ? 40 : 20,
-        paddingBottom: 20,
-        paddingHorizontal: 20,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 8,
-        zIndex: 10,
     },
     headerWrapperCustom: {
         backgroundColor: Theme.colors.primary,
@@ -369,13 +429,9 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 18,
         fontWeight: 'bold',
-        tracking: 0.5,
+        letterSpacing: 0.5,
     },
     backBtn: {
-        padding: 8,
-        borderRadius: 20,
-    },
-    iconBtn: {
         padding: 8,
         borderRadius: 20,
     },
@@ -398,6 +454,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
+        flex: 1,
     },
     busIconContainer: {
         backgroundColor: '#f3f4f6',
@@ -412,9 +469,11 @@ const styles = StyleSheet.create({
     driverText: {
         fontSize: 11,
         color: '#6b7280',
+        marginTop: 2,
     },
     statusRight: {
         alignItems: 'flex-end',
+        marginLeft: 10,
     },
     arrivingLabel: {
         fontSize: 10,
@@ -431,36 +490,20 @@ const styles = StyleSheet.create({
         flex: 1,
         zIndex: 1,
     },
-    mapPlaceholder: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#e5e7eb',
-    },
-    overlayText: {
-        marginTop: 10,
-        color: '#6b7280',
-        fontWeight: '500',
-    },
-    busMarker: {
-        backgroundColor: Theme.colors.primary,
-        padding: 8,
+    floatingBanner: {
+        position: 'absolute',
+        top: 16,
+        alignSelf: 'center',
+        backgroundColor: 'rgba(17, 24, 39, 0.85)',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
         borderRadius: 20,
-        borderWidth: 2,
-        borderColor: 'white',
+        zIndex: 20,
     },
-    homeMarker: {
-        backgroundColor: '#3b82f6',
-        padding: 8,
-        borderRadius: 20,
-        borderWidth: 2,
-        borderColor: 'white',
-    },
-    mapOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(255,255,255,0.6)',
-        justifyContent: 'center',
-        alignItems: 'center',
+    floatingBannerText: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: '600',
     },
     mapControls: {
         position: 'absolute',
@@ -610,24 +653,6 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
         fontSize: 12,
         color: Theme.colors.brandGrey,
-    },
-    shareBtn: {
-        flex: 1,
-        backgroundColor: '#f3f4f6',
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: 10,
-        height: 56,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-    },
-    shareBtnText: {
-        fontWeight: '900',
-        textTransform: 'uppercase',
-        fontSize: 12,
-        color: '#374151',
     },
 });
 

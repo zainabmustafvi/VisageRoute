@@ -44,7 +44,9 @@ const {
     driverSchema, 
     driverCreateSchema,
     busSchema,
-    busRouteSchema 
+    busRouteSchema,
+    assignBusStudentSchema,
+    assignBusDriverSchema
 } = require('../validators/adminValidator');
 
 const {
@@ -70,12 +72,20 @@ const {
     getScheduleTemplate,
     getRecentUploads,
     createAnnouncement,
-    getAdminStats
+    getAdminStats,
+    assignBusStudent,
+    assignBusDriver
 } = require('../controllers/adminController');
 
 // All admin routes must be protected and restricted to the 'admin' role
 router.use(protect);
 router.use(authorizeRoles('admin'));
+
+// Bus Assignment Routes
+router.post('/assign-bus-student', validateSchema(assignBusStudentSchema), assignBusStudent);
+router.put('/assign-bus-student', validateSchema(assignBusStudentSchema), assignBusStudent);
+router.post('/assign-bus-driver', validateSchema(assignBusDriverSchema), assignBusDriver);
+router.put('/assign-bus-driver', validateSchema(assignBusDriverSchema), assignBusDriver);
 
 // Student Routes
 router.route('/students')

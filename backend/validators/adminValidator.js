@@ -1,5 +1,7 @@
 const { z } = require('zod');
 
+const idOrEmptyString = z.union([z.string().regex(/^[0-9a-fA-F]{24}$/), z.literal('')]).optional().nullable();
+
 // Schema for creating a student (strict — all required fields must be present)
 const studentCreateSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters").max(100).trim(),
@@ -9,12 +11,11 @@ const studentCreateSchema = z.object({
     parentName: z.string().min(2, "Parent name is required").trim(),
     parentEmail: z.string().email("Invalid parent email format"),
     department: z.string().optional(),
-    routeId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
-    parentId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
-    // imageBase64 is optional for normal registration; only needed for biometric enrolment
+    routeId: idOrEmptyString,
+    parentId: idOrEmptyString,
     imageBase64: z.string().min(10).optional(),
     faceEmbedding: z.array(z.number()).optional(),
-    busId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
+    busId: idOrEmptyString,
     rollNo: z.string().optional(),
     year: z.string().optional(),
     semester: z.string().optional(),
@@ -33,9 +34,8 @@ const driverCreateSchema = z.object({
     address: z.string().optional(),
     licenseNumber: z.string().min(5).max(20).trim(),
     licenseClass: z.enum(['Class A', 'Class B', 'Class C']),
-    // Accept YYYY-MM-DD or any ISO date string (the frontend may send full ISO)
     licenseExpiry: z.string().min(1, "License expiry is required"),
-    assignedBusId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
+    assignedBusId: idOrEmptyString,
 });
 
 // Schema for updating a driver — all fields optional
@@ -47,20 +47,34 @@ const busSchema = z.object({
     capacity: z.number().int().positive().max(100),
     gpsDeviceId: z.string().optional().nullable(),
     status: z.enum(['available', 'in-use', 'maintenance']).optional(),
-    driverId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
+    driverId: idOrEmptyString,
     assignedStudents: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/)).optional(),
 });
 
 // Schema for creating/updating a bus route (path/schedule)
 const busRouteSchema = z.object({
     routeName: z.string().min(3).max(50).trim(),
-    driverId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional().nullable(),
+    driverId: idOrEmptyString,
     capacity: z.number().int().positive().max(100, "Capacity cannot exceed 100").optional(),
     schedule: z.object({
         departureTime: z.string().optional(),
         estimatedArrivalTime: z.string().optional(),
     }).optional(),
     status: z.enum(['Scheduled', 'In Transit', 'Completed', 'Delayed']).optional(),
+});
+
+const assignBusStudentSchema = z.object({
+    studentId: z.string().optional(),
+    id: z.string().optional(),
+    busId: idOrEmptyString,
+    routeId: idOrEmptyString,
+});
+
+const assignBusDriverSchema = z.object({
+    driverId: z.string().optional(),
+    id: z.string().optional(),
+    busId: idOrEmptyString,
+    assignedBusId: idOrEmptyString,
 });
 
 // Generic Validation Middleware
@@ -98,6 +112,8 @@ module.exports = {
     driverCreateSchema,
     busSchema,
     busRouteSchema,
+    assignBusStudentSchema,
+    assignBusDriverSchema,
     loginSchema,
     validateSchema,
 };
