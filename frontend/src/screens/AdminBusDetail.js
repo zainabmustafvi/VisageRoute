@@ -68,19 +68,24 @@ const AdminBusDetail = ({ navigation, route }) => {
     const handleSave = async () => {
         try {
             setIsSaving(true);
-            const token = await SecureStore.getItemAsync('socketToken');
+            const token = await SecureStore.getItemAsync('socketToken') || await SecureStore.getItemAsync('userToken');
+            const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+            const cleanDriverId = selectedDriverId ? (typeof selectedDriverId === 'object' ? String(selectedDriverId._id || selectedDriverId.id) : String(selectedDriverId)) : null;
+
             const payload = {
                 busNumber,
                 plateNumber: plateNumber.toUpperCase(),
                 capacity: parseInt(capacity),
-                driverId: selectedDriverId || null,
+                driverId: cleanDriverId,
                 gpsDeviceId: gpsDeviceId || null,
                 status
             };
 
-            await axios.put(`${API_BASE_URL}/api/admin/buses/${paramId}`, payload, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await axios.put(`${API_BASE_URL}/api/admin/buses/${paramId}`, payload, { headers });
+            if (cleanDriverId) {
+                await axios.post(`${API_BASE_URL}/api/admin/assign-bus-driver`, { driverId: cleanDriverId, busId: paramId }, { headers }).catch(() => {});
+            }
 
             Alert.alert('Success', 'Bus updated successfully', [
                 { text: 'OK', onPress: () => navigation.goBack() }
@@ -218,7 +223,10 @@ const AdminBusDetail = ({ navigation, route }) => {
                                 <MaterialCommunityIcons name="badge-account-outline" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <Picker
                                     selectedValue={selectedDriverId}
-                                    onValueChange={(v) => setSelectedDriverId(v)}
+                                    onValueChange={(v) => {
+                                        const cleanVal = v ? (typeof v === 'object' ? String(v._id || v.id || '') : String(v)) : '';
+                                        setSelectedDriverId(cleanVal);
+                                    }}
                                     style={styles.picker}
                                 >
                                     <Picker.Item label="Unassigned" value="" />
