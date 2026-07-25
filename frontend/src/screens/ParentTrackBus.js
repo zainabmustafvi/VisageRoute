@@ -11,17 +11,10 @@ import Theme from '../theme/Theme';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 
-let MapView, Marker, Polyline;
-try {
-    const Maps = require('react-native-maps');
-    MapView = Maps.default || Maps.MapView || Maps;
-    Marker = Maps.Marker;
-    Polyline = Maps.Polyline;
-} catch (e) {
-    // Fallback if react-native-maps is not available in environment
-}
-
 const SOCKET_URL = API_BASE_URL;
+
+// Helper to validate coordinate objects safely
+const isValidCoord = (loc) => loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number' && !isNaN(loc.latitude) && !isNaN(loc.longitude);
 
 const ParentTrackBus = ({ route, navigation }) => {
     const studentId = route?.params?.studentId;
@@ -33,7 +26,6 @@ const ParentTrackBus = ({ route, navigation }) => {
     const [connected, setConnected] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const socketRef = useRef(null);
-    const mapRef = useRef(null);
 
     const fetchStatus = async (token) => {
         try {
@@ -49,12 +41,13 @@ const ParentTrackBus = ({ route, navigation }) => {
                 setEta(res.data.routeInfo.eta);
             }
 
-            // Load initial / last known location from REST API if available
+            // Safe parsing of latestLocation from REST API
             if (res.data.routeInfo?.latestLocation?.latitude && res.data.routeInfo?.latestLocation?.longitude) {
-                setDriverLocation({
-                    latitude: Number(res.data.routeInfo.latestLocation.latitude),
-                    longitude: Number(res.data.routeInfo.latestLocation.longitude),
-                });
+                const lat = Number(res.data.routeInfo.latestLocation.latitude);
+                const lng = Number(res.data.routeInfo.latestLocation.longitude);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    setDriverLocation({ latitude: lat, longitude: lng });
+                }
             }
 
             if (!res.data.routeInfo?.driverOnline) {
@@ -83,13 +76,21 @@ const ParentTrackBus = ({ route, navigation }) => {
 
             await fetchStatus(token);
 
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') {
-                const loc = await Location.getCurrentPositionAsync({});
-                setMyLocation({
-                    latitude: loc.coords.latitude,
-                    longitude: loc.coords.longitude,
-                });
+            // Graceful location error handling
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status === 'granted') {
+                    const loc = await Location.getCurrentPositionAsync({});
+                    if (loc && loc.coords && typeof loc.coords.latitude === 'number' && typeof loc.coords.longitude === 'number') {
+                        const lat = Number(loc.coords.latitude);
+                        const lng = Number(loc.coords.longitude);
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            setMyLocation({ latitude: lat, longitude: lng });
+                        }
+                    }
+                }
+            } catch (locationErr) {
+                console.warn('[Location Error] Gracefully handled GPS failure:', locationErr.message);
             }
 
             socket = io(SOCKET_URL, {
@@ -118,29 +119,23 @@ const ParentTrackBus = ({ route, navigation }) => {
             });
 
             socket.on('bus_location_update', (data) => {
-                const lat = data.latitude !== undefined ? data.latitude : data.lat;
-                const lng = data.longitude !== undefined ? data.longitude : data.lng;
-                if (lat && lng) {
-                    setDriverLocation({
-                        latitude: Number(lat),
-                        longitude: Number(lng),
-                    });
+                const lat = Number(data?.latitude !== undefined ? data.latitude : data?.lat);
+                const lng = Number(data?.longitude !== undefined ? data.longitude : data?.lng);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    setDriverLocation({ latitude: lat, longitude: lng });
                 }
-                if (data.eta !== undefined) setEta(data.eta);
+                if (data?.eta !== undefined) setEta(data.eta);
                 setTripStatus('Bus is on the way!');
             });
 
             socket.on('locationUpdate', (data) => {
                 const loc = data.driverLocation || data;
-                const lat = loc?.latitude !== undefined ? loc.latitude : loc?.lat;
-                const lng = loc?.longitude !== undefined ? loc.longitude : loc?.lng;
-                if (lat && lng) {
-                    setDriverLocation({
-                        latitude: Number(lat),
-                        longitude: Number(lng),
-                    });
+                const lat = Number(loc?.latitude !== undefined ? loc.latitude : loc?.lat);
+                const lng = Number(loc?.longitude !== undefined ? loc.longitude : loc?.lng);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    setDriverLocation({ latitude: lat, longitude: lng });
                 }
-                if (data.eta !== undefined) setEta(data.eta);
+                if (data?.eta !== undefined) setEta(data.eta);
                 setTripStatus('Bus is on the way!');
             });
 
@@ -163,34 +158,6 @@ const ParentTrackBus = ({ route, navigation }) => {
             if (socket) socket.disconnect();
         };
     }, [studentId]);
-
-    // Automatic Map Zoom & Fit
-    useEffect(() => {
-        if (myLocation && driverLocation) {
-            if (mapRef.current && typeof mapRef.current.fitToCoordinates === 'function') {
-                mapRef.current.fitToCoordinates(
-                    [
-                        { latitude: myLocation.latitude, longitude: myLocation.longitude },
-                        { latitude: driverLocation.latitude, longitude: driverLocation.longitude }
-                    ],
-                    {
-                        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-                        animated: true
-                    }
-                );
-            }
-        } else if (mapRef.current && typeof mapRef.current.animateToRegion === 'function') {
-            const singleLoc = myLocation || driverLocation;
-            if (singleLoc) {
-                mapRef.current.animateToRegion({
-                    latitude: singleLoc.latitude,
-                    longitude: singleLoc.longitude,
-                    latitudeDelta: 0.02,
-                    longitudeDelta: 0.02,
-                }, 1000);
-            }
-        }
-    }, [myLocation, driverLocation]);
 
     const handleCallDriver = () => {
         const phone = childStatus?.driverInfo?.phone || childStatus?.driverInfo?.contact || childStatus?.driver?.phone || childStatus?.driver?.contact;
@@ -226,11 +193,12 @@ const ParentTrackBus = ({ route, navigation }) => {
         </View>
     );
 
+    // Build sanitized markers array for LeafletMap
     const mapMarkers = [];
-    if (driverLocation) {
+    if (isValidCoord(driverLocation)) {
         mapMarkers.push({ coordinate: driverLocation, icon: 'bus', title: 'Bus Location' });
     }
-    if (myLocation) {
+    if (isValidCoord(myLocation)) {
         mapMarkers.push({ coordinate: myLocation, icon: 'home', title: 'Parent Location' });
     }
 
@@ -278,51 +246,9 @@ const ParentTrackBus = ({ route, navigation }) => {
                 </View>
             </View>
 
-            {/* Map Area */}
+            {/* Map Area — Exclusively LeafletMap with OSM */}
             <View style={styles.mapContainer}>
-                {Platform.OS === 'web' ? (
-                    <LeafletMap markers={mapMarkers} />
-                ) : MapView ? (
-                    <MapView
-                        ref={mapRef}
-                        style={StyleSheet.absoluteFillObject}
-                        initialRegion={{
-                            latitude: myLocation?.latitude || driverLocation?.latitude || 24.8607,
-                            longitude: myLocation?.longitude || driverLocation?.longitude || 67.0011,
-                            latitudeDelta: 0.05,
-                            longitudeDelta: 0.05,
-                        }}
-                    >
-                        {myLocation && (
-                            <Marker
-                                coordinate={{ latitude: myLocation.latitude, longitude: myLocation.longitude }}
-                                title="Parent Location"
-                                description="Your current location"
-                                pinColor="blue"
-                            />
-                        )}
-                        {driverLocation && (
-                            <Marker
-                                coordinate={{ latitude: driverLocation.latitude, longitude: driverLocation.longitude }}
-                                title="Bus Location"
-                                description={`Bus #${childStatus?.student?.busNumber || 'N/A'}`}
-                                pinColor="green"
-                            />
-                        )}
-                        {myLocation && driverLocation && (
-                            <Polyline
-                                coordinates={[
-                                    { latitude: myLocation.latitude, longitude: myLocation.longitude },
-                                    { latitude: driverLocation.latitude, longitude: driverLocation.longitude }
-                                ]}
-                                strokeColor="#3b82f6"
-                                strokeWidth={4}
-                            />
-                        )}
-                    </MapView>
-                ) : (
-                    <LeafletMap markers={mapMarkers} />
-                )}
+                <LeafletMap markers={mapMarkers} />
 
                 {/* Status indicator chip if driver offline */}
                 {!childStatus?.routeInfo?.driverOnline && (

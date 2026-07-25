@@ -1,11 +1,11 @@
 import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 /**
  * LeafletMap - A generic OpenStreetMap component using Leaflet via WebView
  * 
- * @param {Array} markers - Array of objects: { coordinate: { lat, lng }, icon: 'bus'|'home'|'driver', title: '...' }
+ * @param {Array} markers - Array of objects: { coordinate: { latitude, longitude }, icon: 'bus'|'home'|'driver', title: '...' }
  */
 const LeafletMap = ({ markers = [] }) => {
     const webViewRef = useRef(null);
@@ -20,7 +20,6 @@ const LeafletMap = ({ markers = [] }) => {
             <style>
                 body { margin: 0; padding: 0; background-color: #f3f4f6; }
                 #map { width: 100vw; height: 100vh; }
-                /* Custom Icon Styling */
                 .custom-icon {
                     display: flex;
                     justify-content: center;
@@ -30,80 +29,104 @@ const LeafletMap = ({ markers = [] }) => {
                     box-shadow: 0 2px 5px rgba(0,0,0,0.3);
                     font-size: 16px;
                 }
-                .icon-bus { background-color: #10b981; } /* Emerald */
-                .icon-home { background-color: #3b82f6; } /* Blue */
-                .icon-driver { background-color: #10b981; } /* Emerald */
+                .icon-bus { background-color: #10b981; }
+                .icon-home { background-color: #3b82f6; }
+                .icon-driver { background-color: #10b981; }
             </style>
         </head>
         <body>
             <div id="map"></div>
             <script>
-                // Initialize map
-                var map = L.map('map', {
-                    zoomControl: false,
-                    attributionControl: false
-                }).setView([24.8607, 67.0011], 13);
-                
-                // Add OpenStreetMap tiles
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                }).addTo(map);
+                try {
+                    var map = L.map('map', {
+                        zoomControl: false,
+                        attributionControl: false
+                    }).setView([24.8607, 67.0011], 13);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                    }).addTo(map);
 
-                var markersLayer = L.layerGroup().addTo(map);
-                var polylineLayer = L.layerGroup().addTo(map);
+                    var markersLayer = L.layerGroup().addTo(map);
+                    window.routeLine = null;
 
-                function createIcon(type) {
-                    var className = 'custom-icon icon-' + (type || 'bus');
-                    var emoji = '📍';
-                    if (type === 'bus') emoji = '🚌';
-                    if (type === 'driver') emoji = '🚌';
-                    if (type === 'home') emoji = '🏠';
+                    function createIcon(type) {
+                        var className = 'custom-icon icon-' + (type || 'bus');
+                        var emoji = '📍';
+                        if (type === 'bus' || type === 'driver') emoji = '🚌';
+                        if (type === 'home') emoji = '🏠';
 
-                    return L.divIcon({
-                        className: 'custom-div-icon',
-                        html: "<div class='" + className + "' style='width:32px; height:32px;'>" + emoji + "</div>",
-                        iconSize: [32, 32],
-                        iconAnchor: [16, 16]
-                    });
-                }
+                        return L.divIcon({
+                            className: 'custom-div-icon',
+                            html: "<div class='" + className + "' style='width:32px; height:32px;'>" + emoji + "</div>",
+                            iconSize: [32, 32],
+                            iconAnchor: [16, 16]
+                        });
+                    }
 
-                function updateMarkers(markers) {
-                    markersLayer.clearLayers();
-                    polylineLayer.clearLayers();
-                    var bounds = L.latLngBounds();
-                    var latLngs = [];
-                    var validMarkers = 0;
+                    function updateMarkers(markersData) {
+                        try {
+                            markersLayer.clearLayers();
+                            if (window.routeLine) {
+                                map.removeLayer(window.routeLine);
+                                window.routeLine = null;
+                            }
 
-                    if (!markers || markers.length === 0) return;
+                            if (!markersData || !Array.isArray(markersData) || markersData.length === 0) return;
 
-                    markers.forEach(function(m) {
-                        if (!m || !m.coordinate) return;
-                        var lat = m.coordinate.latitude !== undefined ? m.coordinate.latitude : m.coordinate.lat;
-                        var lng = m.coordinate.longitude !== undefined ? m.coordinate.longitude : m.coordinate.lng;
+                            var bounds = L.latLngBounds();
+                            var validMarkerCoords = [];
+                            var parentCoord = null;
+                            var busCoord = null;
 
-                        if (lat !== undefined && lng !== undefined && lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
-                            var marker = L.marker([lat, lng], {
-                                icon: createIcon(m.icon)
-                            }).addTo(markersLayer);
-                            bounds.extend(marker.getLatLng());
-                            latLngs.push([lat, lng]);
-                            validMarkers++;
+                            markersData.forEach(function(m) {
+                                if (!m || !m.coordinate) return;
+                                var lat = Number(m.coordinate.latitude !== undefined ? m.coordinate.latitude : m.coordinate.lat);
+                                var lng = Number(m.coordinate.longitude !== undefined ? m.coordinate.longitude : m.coordinate.lng);
+
+                                if (!isNaN(lat) && !isNaN(lng) && isFinite(lat) && isFinite(lng) && lat !== 0 && lng !== 0) {
+                                    var marker = L.marker([lat, lng], {
+                                        icon: createIcon(m.icon)
+                                    }).addTo(markersLayer);
+                                    bounds.extend(marker.getLatLng());
+                                    validMarkerCoords.push([lat, lng]);
+
+                                    if (m.icon === 'home') parentCoord = [lat, lng];
+                                    if (m.icon === 'bus' || m.icon === 'driver') busCoord = [lat, lng];
+                                }
+                            });
+
+                            // Safe Polyline Execution
+                            if (parentCoord && busCoord) {
+                                window.routeLine = L.polyline([parentCoord, busCoord], { color: '#0284c7', weight: 4, opacity: 0.8 }).addTo(map);
+                                if (window.routeLine.getBounds().isValid()) {
+                                    map.fitBounds(window.routeLine.getBounds(), { padding: [50, 50], maxZoom: 16 });
+                                }
+                            } else if (validMarkerCoords.length > 1 && bounds.isValid()) {
+                                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                            } else if (validMarkerCoords.length === 1) {
+                                map.setView(validMarkerCoords[0], 16);
+                            }
+                        } catch (err) {
+                            console.error("Leaflet update markers error:", err);
+                        }
+                    }
+
+                    window.addEventListener('message', function(event) {
+                        try {
+                            var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                            if (data && data.markers) {
+                                updateMarkers(data.markers);
+                            }
+                        } catch (e) {
+                            console.error("Leaflet message parse error:", e);
                         }
                     });
 
-                    if (latLngs.length >= 2) {
-                        L.polyline(latLngs, { color: '#3b82f6', weight: 4, opacity: 0.8 }).addTo(polylineLayer);
-                    }
-
-                    if (validMarkers > 1) {
-                        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-                    } else if (validMarkers === 1) {
-                        map.setView(latLngs[0], 16);
-                    }
+                    updateMarkers([]);
+                } catch (initErr) {
+                    console.error("Leaflet map init error:", initErr);
                 }
-
-                // Initial clear
-                updateMarkers([]);
             </script>
         </body>
         </html>
@@ -111,33 +134,42 @@ const LeafletMap = ({ markers = [] }) => {
 
     useEffect(() => {
         if (webViewRef.current) {
-            // Safely inject JS to update markers when the props change
-            const script = `updateMarkers(${JSON.stringify(markers)});`;
-            webViewRef.current.injectJavaScript(script + ' true;');
+            try {
+                const safeMarkers = (markers || []).filter(m =>
+                    m && m.coordinate &&
+                    !isNaN(Number(m.coordinate.latitude !== undefined ? m.coordinate.latitude : m.coordinate.lat)) &&
+                    !isNaN(Number(m.coordinate.longitude !== undefined ? m.coordinate.longitude : m.coordinate.lng))
+                );
+                const script = `try { updateMarkers(${JSON.stringify(safeMarkers)}); } catch(e) { console.error(e); } true;`;
+                webViewRef.current.injectJavaScript(script);
+            } catch (err) {
+                console.error('WebView injection error:', err);
+            }
         }
     }, [markers]);
 
     return (
         <View style={styles.container}>
-            {Platform.OS === 'web' ? (
-                <View style={styles.webPlaceholder}>
-                    {/* WebView is primarily for mobile. If running on web Expo, it might need iframe mapping. */}
-                </View>
-            ) : (
-                <WebView
-                    ref={webViewRef}
-                    originWhitelist={['*']}
-                    source={{ html: htmlContent }}
-                    style={{ flex: 1, backgroundColor: 'transparent' }}
-                    scrollEnabled={false}
-                    bounces={false}
-                    showsHorizontalScrollIndicator={false}
-                    showsVerticalScrollIndicator={false}
-                    javaScriptEnabled={true}
-                    domStorageEnabled={true}
-                    onMessage={(event) => {}}
-                />
-            )}
+            <WebView
+                ref={webViewRef}
+                originWhitelist={['*']}
+                source={{ html: htmlContent }}
+                style={{ flex: 1, backgroundColor: 'transparent' }}
+                scrollEnabled={false}
+                bounces={false}
+                showsHorizontalScrollIndicator={false}
+                showsVerticalScrollIndicator={false}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                onMessage={(event) => {
+                    try {
+                        const data = JSON.parse(event.nativeEvent.data);
+                        if (data && data.markers && webViewRef.current) {
+                            // Bridge message handling
+                        }
+                    } catch (e) { }
+                }}
+            />
         </View>
     );
 };
@@ -147,12 +179,6 @@ const styles = StyleSheet.create({
         flex: 1,
         overflow: 'hidden',
     },
-    webPlaceholder: {
-        flex: 1,
-        backgroundColor: '#e5e7eb',
-        justifyContent: 'center',
-        alignItems: 'center',
-    }
 });
 
 export default LeafletMap;
