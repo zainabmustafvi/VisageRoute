@@ -307,7 +307,10 @@ const AdminRegisterStudent = ({ navigation, route }) => {
                                 <MaterialCommunityIcons name="bus" size={20} color="#9ca3af" style={styles.inputIcon} />
                                 <Picker
                                     selectedValue={busId}
-                                    onValueChange={(v) => handleFieldChange('busId', v, setBusId)}
+                                    onValueChange={(v) => {
+                                        const cleanVal = v ? (typeof v === 'object' ? String(v._id || v.id || '') : String(v)) : '';
+                                        handleFieldChange('busId', cleanVal, setBusId);
+                                    }}
                                     style={styles.picker}
                                     enabled={!isLoadingBuses}
                                 >

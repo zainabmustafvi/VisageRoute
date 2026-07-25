@@ -50,6 +50,7 @@ const LeafletMap = ({ markers = [] }) => {
                 }).addTo(map);
 
                 var markersLayer = L.layerGroup().addTo(map);
+                var polylineLayer = L.layerGroup().addTo(map);
 
                 function createIcon(type) {
                     var className = 'custom-icon icon-' + (type || 'bus');
@@ -68,26 +69,36 @@ const LeafletMap = ({ markers = [] }) => {
 
                 function updateMarkers(markers) {
                     markersLayer.clearLayers();
+                    polylineLayer.clearLayers();
                     var bounds = L.latLngBounds();
+                    var latLngs = [];
                     var validMarkers = 0;
 
                     if (!markers || markers.length === 0) return;
 
                     markers.forEach(function(m) {
-                        if (m.coordinate && m.coordinate.lat && m.coordinate.lng) {
-                            var marker = L.marker([m.coordinate.lat, m.coordinate.lng], {
+                        if (!m || !m.coordinate) return;
+                        var lat = m.coordinate.latitude !== undefined ? m.coordinate.latitude : m.coordinate.lat;
+                        var lng = m.coordinate.longitude !== undefined ? m.coordinate.longitude : m.coordinate.lng;
+
+                        if (lat !== undefined && lng !== undefined && lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
+                            var marker = L.marker([lat, lng], {
                                 icon: createIcon(m.icon)
                             }).addTo(markersLayer);
                             bounds.extend(marker.getLatLng());
+                            latLngs.push([lat, lng]);
                             validMarkers++;
                         }
                     });
 
-                    // Auto-adjust viewport
+                    if (latLngs.length >= 2) {
+                        L.polyline(latLngs, { color: '#3b82f6', weight: 4, opacity: 0.8 }).addTo(polylineLayer);
+                    }
+
                     if (validMarkers > 1) {
-                        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+                        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
                     } else if (validMarkers === 1) {
-                        map.setView([markers[0].coordinate.lat, markers[0].coordinate.lng], 16);
+                        map.setView(latLngs[0], 16);
                     }
                 }
 
