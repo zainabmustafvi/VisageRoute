@@ -421,7 +421,7 @@ const updateDriver = async (req, res) => {
     }
 };
 
-// @desc    Soft-delete a driver
+// @desc    Permanently delete a driver and their user account
 // @route   DELETE /api/admin/drivers/:id
 // @access  Private/Admin
 const deleteDriver = async (req, res) => {
@@ -429,16 +429,22 @@ const deleteDriver = async (req, res) => {
         const driver = await Driver.findById(req.params.id);
         if (!driver) return res.status(404).json({ error: 'Driver not found' });
 
-        driver.isActive = false;
-        // Also unlink bus if assigned
+        // Unlink bus if assigned
         if (driver.assignedBusId) {
             await Bus.findByIdAndUpdate(driver.assignedBusId, { driverId: null });
-            driver.assignedBusId = null;
         }
 
-        await driver.save();
-        res.json({ message: 'Driver deactivated successfully' });
+        // Delete the associated User account so they can no longer log in
+        if (driver.user) {
+            await User.findByIdAndDelete(driver.user);
+        }
+
+        // Permanently remove the Driver document
+        await Driver.findByIdAndDelete(req.params.id);
+
+        res.json({ message: 'Driver and associated user account permanently deleted' });
     } catch (err) {
+        console.error('Driver deletion error:', err);
         res.status(500).json({ error: 'Server Error during driver deletion' });
     }
 };
