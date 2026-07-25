@@ -40,8 +40,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
                 <MaterialIcons name="arrow-back" size={24} color={Theme.colors.brandGrey} />
             </TouchableOpacity>
             
-            <Text style={styles.title}>Forgot Password</Text>
-            <Text style={styles.subtitle}>Enter your details to receive an access token code.</Text>
+            <Text style={[styles.title, { textAlign: 'center' }]}>Forgot Password</Text>
+            <Text style={[styles.subtitle, { textAlign: 'center' }]}>Enter your details to receive an access token code.</Text>
 
             {msg ? <Text style={styles.feedbackText}>{msg}</Text> : null}
 
@@ -66,8 +66,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
                 autoCapitalize="none"
             />
 
-            <TouchableOpacity style={[globalStyles.button, { marginTop: 20 }]} onPress={handleSendCode} disabled={loading}>
-                {loading ? <ActivityIndicator color="#000" /> : <Text style={globalStyles.buttonText}>Send Reset Code</Text>}
+            <TouchableOpacity style={[globalStyles.primaryButton, { marginTop: 20, alignSelf: 'center', width: '100%' }]} onPress={handleSendCode} disabled={loading}>
+                {loading ? <ActivityIndicator color="#1c190d" /> : <Text style={globalStyles.primaryButtonText}>Send Reset Code</Text>}
             </TouchableOpacity>
         </SafeAreaView>
     );
