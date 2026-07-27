@@ -53,18 +53,7 @@ const driverSchema = new mongoose.Schema({
         required: false,
         sparse: true,
     },
-    // Modern reference: ObjectId link to the User account (optional for backward compat)
-    user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: false,
-        sparse: true,
-    },
-    user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
-    },
+    // Modern reference: ObjectId link to the User account
     user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

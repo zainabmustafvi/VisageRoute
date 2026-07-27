@@ -203,6 +203,7 @@ const getChildStatus = async (req, res) => {
                 name: student.name,
                 grade: student.department || student.year || 'Not provided',
                 rollNo: student.rollNo,
+                busId: student.busId ? student.busId._id : null,
                 busNumber: student.busId ? student.busId.busNumber : null,
             },
             driverInfo: driverRecord ? {

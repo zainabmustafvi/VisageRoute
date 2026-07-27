@@ -1011,7 +1011,10 @@ const getAdminStats = async (req, res) => {
 const assignBusStudent = async (req, res) => {
     try {
         const studentId = req.body.studentId || req.body.id;
-        let busId = req.body.busId !== undefined ? req.body.busId : req.body.routeId;
+        // Normalize: accept busId, routeId, or assignedBusId for backward compat
+        let busId = req.body.busId !== undefined ? req.body.busId
+                 : req.body.routeId !== undefined ? req.body.routeId
+                 : req.body.assignedBusId;
 
         if (typeof busId === 'object' && busId !== null) {
             busId = busId._id || busId.id;
@@ -1021,6 +1024,7 @@ const assignBusStudent = async (req, res) => {
         if (!studentId) {
             return res.status(400).json({ error: 'studentId is required' });
         }
+        console.log(`[AssignBusStudent] studentId=${studentId}, busId=${busId}`);
 
         const student = await Student.findById(studentId);
         if (!student) {

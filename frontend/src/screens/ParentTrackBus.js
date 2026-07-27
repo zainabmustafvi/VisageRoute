@@ -62,9 +62,10 @@ const ParentTrackBus = ({ route, navigation }) => {
         }
     };
 
+    const hasJoinedBusRef = useRef(false);
+
     useEffect(() => {
         let socket;
-        let hasJoinedBus = false;
 
         const setupTracking = async () => {
             const token = await SecureStore.getItemAsync('userToken') || await SecureStore.getItemAsync('socketToken');
@@ -103,9 +104,9 @@ const ParentTrackBus = ({ route, navigation }) => {
                 setConnected(true);
 
                 const busId = childStatus?.student?.busId;
-                if (busId && !hasJoinedBus) {
+                if (busId && !hasJoinedBusRef.current) {
                     socket.emit('subscribe_bus', { busID: busId });
-                    hasJoinedBus = true;
+                    hasJoinedBusRef.current = true;
                 }
 
                 if (childStatus?.routeInfo?.routeId) {
