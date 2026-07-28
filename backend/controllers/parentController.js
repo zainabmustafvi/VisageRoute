@@ -258,6 +258,7 @@ const getParentProfile = async (req, res) => {
             name: student.name,
             grade: student.department || student.year || 'Not provided',
             rollNo: student.rollNo || 'Not provided',
+            busId: student.busId ? student.busId._id : null,
             busNumber: student.busId ? student.busId.busNumber : 'Not Assigned',
             isActive: true
         }));
