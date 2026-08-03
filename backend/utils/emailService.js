@@ -3,18 +3,28 @@ const nodemailer = require('nodemailer');
 // Create a shared transporter with explicit timeouts to prevent hanging connections
 const createTransporter = () => nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'sandbox.smtp.mailtrap.io',
-    port: parseInt(process.env.SMTP_PORT || '2525'),
-    secure: process.env.SMTP_PORT == '465',
+    port: Number(process.env.SMTP_PORT) || 2525, // Port 2525 or 587 are NOT blocked by Railway
+    secure: process.env.SMTP_PORT == '465', // true for 465, false for 2525 / 587
     auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
     },
-    // Explicit timeouts to prevent Railway 499 (request timeout) errors
-    connectionTimeout: 8000,   // 8s to establish connection
-    greetingTimeout: 8000,     // 8s for SMTP greeting
-    socketTimeout: 10000,      // 10s for socket inactivity
+    // Explicit timeouts to prevent long hangs / Railway 499 (request timeout) errors
+    connectionTimeout: 10000, // 10s to establish connection
+    greetingTimeout: 10000,   // 10s for SMTP greeting
+    socketTimeout: 10000,     // 10s for socket inactivity
     tls: {
         rejectUnauthorized: false
+    }
+});
+
+// Verify connection configuration on backend boot
+const transporter = createTransporter();
+transporter.verify((error, success) => {
+    if (error) {
+        console.error('❌ Mailtrap SMTP Connection Failed on Railway:', error.message);
+    } else {
+        console.log('✅ Mailtrap SMTP Server connected successfully on port', process.env.SMTP_PORT || 2525);
     }
 });
 
@@ -47,6 +57,8 @@ const sendRegistrationEmail = async (email, name, userId, password) => {
         return true;
     } catch (error) {
         console.error('❌ Email Service Error:', error.message);
+        if (error.code) console.error('Network/Error Code:', error.code);
+        if (error.command) console.error('Failed SMTP Command:', error.command);
         if (error.response) console.error('SMTP Response:', error.response);
         return false;
     }
@@ -74,6 +86,9 @@ const sendAnnouncementEmail = async (email, title, content, priority) => {
         return true;
     } catch (error) {
         console.error('❌ Announcement Email Error:', error.message);
+        if (error.code) console.error('Network/Error Code:', error.code);
+        if (error.command) console.error('Failed SMTP Command:', error.command);
+        if (error.response) console.error('SMTP Response:', error.response);
         return false;
     }
 };
@@ -102,6 +117,9 @@ const sendPasswordResetEmail = async (email, resetCode) => {
         return true;
     } catch (error) {
         console.error('❌ Password Reset Email Error:', error.message);
+        if (error.code) console.error('Network/Error Code:', error.code);
+        if (error.command) console.error('Failed SMTP Command:', error.command);
+        if (error.response) console.error('SMTP Response:', error.response);
         return false;
     }
 };
