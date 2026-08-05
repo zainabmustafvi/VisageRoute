@@ -113,15 +113,23 @@ const forgotPassword = async (req, res) => {
     // Store hashed verification metrics
     user.resetCode = await bcrypt.hash(resetCode, 10);
     user.resetCodeExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 Minute Window
-    await user.save();
+await user.save();
 
-    // Nodemailer Mailtrap Configuration
+    // Nodemailer Mailtrap Sandbox Configuration
     const transporter = nodemailer.createTransport({
       host: process.env.MAILTRAP_HOST || 'sandbox.smtp.mailtrap.io',
-      port: process.env.MAILTRAP_PORT || 2525,
+      port: Number(process.env.MAILTRAP_PORT) || 2525, // Explicitly cast port to a Number
+      secure: process.env.MAILTRAP_PORT === '465',
       auth: {
         user: process.env.MAILTRAP_USER,
         pass: process.env.MAILTRAP_PASS
+      },
+      // Explicit timeouts to prevent ETIMEDOUT hangs on Railway
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
+      tls: {
+        rejectUnauthorized: false
       }
     });
 
