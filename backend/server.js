@@ -58,6 +58,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/parent', parentRoutes);
+app.use('/api/notifications', parentRoutes);
 app.use('/api/location', locationRoutes);
 
 

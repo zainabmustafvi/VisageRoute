@@ -72,6 +72,7 @@ const {
     getScheduleTemplate,
     getRecentUploads,
     createAnnouncement,
+    sendNotification,
     getAdminStats,
     assignBusStudent,
     assignBusDriver
@@ -129,7 +130,8 @@ router.put('/routes/:id/schedule', updateRouteSchedule);
 // --- Schedule Upload Routes ---
 router.get('/stats', getAdminStats);
 router.post('/upload-schedule', upload.single('schedule'), uploadSchedule);
-router.post('/announcements', createAnnouncement);
+router.post('/announcements', sendNotification);
+router.post('/notifications', sendNotification);
 router.get('/schedule-template', getScheduleTemplate);
 router.get('/recent-uploads', getRecentUploads);
 

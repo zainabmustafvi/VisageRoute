@@ -3,9 +3,18 @@
 const authorizeRoles = (...roles) => {
     return (req, res, next) => {
         // req.user is set by the protect middleware
-        if (!req.user || !roles.includes(req.user.role)) {
+        if (!req.user || !req.user.role) {
             return res.status(403).json({
-                error: `User role '${req.user ? req.user.role : 'Unknown'}' is not authorized to access this route.`
+                error: 'User role is missing or not authorized to access this route.'
+            });
+        }
+
+        const userRole = req.user.role.toLowerCase();
+        const allowedRoles = roles.map(r => r.toLowerCase());
+
+        if (!allowedRoles.includes(userRole)) {
+            return res.status(403).json({
+                error: `User role '${req.user.role}' is not authorized to access this route.`
             });
         }
         next();

@@ -19,6 +19,8 @@ router.use(authorizeRoles('parent'));
 
 router.get('/schedule', getStudentSchedule);
 router.get('/announcements', getAnnouncements);
+router.get('/parent', getAnnouncements);
+router.get('/', getAnnouncements);
 router.put('/announcements/read-all', markAllAnnouncementsRead);
 router.put('/announcements/:id/read', markAnnouncementRead);
 router.get('/child-status', getChildStatus);

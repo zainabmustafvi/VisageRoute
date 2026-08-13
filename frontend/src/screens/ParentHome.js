@@ -15,6 +15,8 @@ import * as Notifications from 'expo-notifications';
 const ParentHome = ({ navigation }) => {
 
     const [latestAnnouncement, setLatestAnnouncement] = useState(null);
+    const [latestNotification, setLatestNotification] = useState(null);
+    const [etaText, setEtaText] = useState('Calculating...');
     const [unreadCount, setUnreadCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [parentName, setParentName] = useState('Parent');
@@ -42,7 +44,7 @@ const ParentHome = ({ navigation }) => {
                 if (!enabled) return;
 
                 const fcmToken = await messaging().getToken();
-                const token = await SecureStore.getItemAsync('socketToken');
+                const token = (await SecureStore.getItemAsync('socketToken')) || (await SecureStore.getItemAsync('userToken'));
                 if (token && fcmToken) {
                     await axios.patch(`${API_BASE_URL}/api/parent/fcm-token`, { fcmToken }, {
                         headers: { Authorization: `Bearer ${token}` }
@@ -50,7 +52,7 @@ const ParentHome = ({ navigation }) => {
                 }
 
                 unsubRefresh = messaging().onTokenRefresh(async (newToken) => {
-                    const freshToken = await SecureStore.getItemAsync('socketToken');
+                    const freshToken = (await SecureStore.getItemAsync('socketToken')) || (await SecureStore.getItemAsync('userToken'));
                     if (freshToken) {
                         await axios.patch(`${API_BASE_URL}/api/parent/fcm-token`, { fcmToken: newToken }, {
                             headers: { Authorization: `Bearer ${freshToken}` }
@@ -101,16 +103,35 @@ const ParentHome = ({ navigation }) => {
 
     const fetchData = async (targetStudentId = null) => {
         try {
-            const token = await SecureStore.getItemAsync('socketToken');
+            const token = (await SecureStore.getItemAsync('socketToken')) || (await SecureStore.getItemAsync('userToken'));
             if (!token) return;
 
-            // Fetch Announcements
-            const res = await axios.get(`${API_BASE_URL}/api/parent/announcements`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const announcements = res.data;
-            setLatestAnnouncement(announcements[0] || null);
-            setUnreadCount(announcements.filter(a => !a.isRead).length);
+            // Fetch Announcements / Notifications List
+            let notificationsList = [];
+            try {
+                const res = await axios.get(`${API_BASE_URL}/api/parent/announcements`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                notificationsList = res.data;
+            } catch (err1) {
+                try {
+                    const res2 = await axios.get(`${API_BASE_URL}/api/notifications/parent`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    notificationsList = res2.data;
+                } catch (err2) {}
+            }
+
+            if (Array.isArray(notificationsList) && notificationsList.length > 0) {
+                const mostRecentNotif = notificationsList[0]; // Most recent notification (index 0)
+                setLatestNotification(mostRecentNotif);
+                setLatestAnnouncement(mostRecentNotif);
+                setUnreadCount(notificationsList.filter(a => !a.isRead).length);
+            } else {
+                setLatestNotification(null);
+                setLatestAnnouncement(null);
+                setUnreadCount(0);
+            }
 
             // Fetch Parent Profile & Students
             const profileRes = await axios.get(`${API_BASE_URL}/api/parent/profile`, {
@@ -120,7 +141,7 @@ const ParentHome = ({ navigation }) => {
             const children = profileRes.data.children || [];
             setStudents(children);
 
-            // Fetch Child Status
+            // Fetch Child Status for ETA
             const activeId = targetStudentId || selectedStudentId || children[0]?.id;
             if (activeId) {
                 if (!selectedStudentId) {
@@ -130,10 +151,23 @@ const ParentHome = ({ navigation }) => {
                 const statusRes = await axios.get(`${API_BASE_URL}/api/parent/child-status?studentId=${activeId}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                setChildStatus(statusRes.data);
+                const statusData = statusRes.data;
+                setChildStatus(statusData);
+
+                const isOnline = statusData?.routeInfo?.driverOnline;
+                const rawEta = statusData?.routeInfo?.estimatedArrival ?? statusData?.routeInfo?.eta ?? statusData?.bus?.eta;
+
+                if (isOnline && rawEta != null && rawEta !== '') {
+                    setEtaText(typeof rawEta === 'number' || (!isNaN(rawEta) && !isNaN(parseFloat(rawEta))) ? `${rawEta} mins` : `${rawEta}`);
+                } else {
+                    setEtaText('Bus Not En Route');
+                }
+            } else {
+                setEtaText('Bus Not En Route');
             }
         } catch (error) {
-            console.error('Error fetching home data:', error);
+            console.error('Error fetching parent home data:', error);
+            setEtaText('N/A');
         } finally {
             setIsLoading(false);
         }
@@ -152,7 +186,7 @@ const ParentHome = ({ navigation }) => {
         let socket;
         let hasJoinedBus = false;
         const initSocketConnection = async () => {
-            const token = await SecureStore.getItemAsync('socketToken');
+            const token = (await SecureStore.getItemAsync('socketToken')) || (await SecureStore.getItemAsync('userToken'));
             if (!token) return;
 
             socket = io(API_BASE_URL, {
@@ -164,9 +198,18 @@ const ParentHome = ({ navigation }) => {
                 console.log('[Parent Home Socket] Connected');
             });
 
+            // Listen for new announcements / notifications
+            socket.on('newAnnouncement', (newAnn) => {
+                setLatestNotification(newAnn);
+                setLatestAnnouncement(newAnn);
+                setUnreadCount(prev => prev + 1);
+            });
+
             // Listen for trip_started event
             socket.on('trip_started', (data) => {
                 console.log('[ParentHome Socket] trip_started received:', data);
+                const newEta = data.eta || 15;
+                setEtaText(`${newEta} mins`);
                 setChildStatus(prev => {
                     if (!prev) return prev;
                     return {
@@ -174,18 +217,17 @@ const ParentHome = ({ navigation }) => {
                         routeInfo: {
                             ...prev.routeInfo,
                             driverOnline: true,
-                            eta: data.eta || prev.routeInfo.eta || 15
+                            eta: newEta
                         }
                     };
                 });
             });
 
-
-
             // Listen for real-time bus location updates (new bus room event)
             socket.on('bus_location_update', (data) => {
-                const busId = data.busID;
-                // Update ETA in child status if it matches the selected student's bus
+                if (data.eta != null) {
+                    setEtaText(`${data.eta} mins`);
+                }
                 setChildStatus(prev => {
                     if (!prev?.student?.busNumber) return prev;
                     return {
@@ -201,6 +243,9 @@ const ParentHome = ({ navigation }) => {
 
             // Listen for legacy location updates
             socket.on('locationUpdate', ({ driverLocation, eta: etaMin }) => {
+                if (etaMin != null) {
+                    setEtaText(`${etaMin} mins`);
+                }
                 setChildStatus(prev => {
                     if (!prev) return prev;
                     return {
@@ -216,6 +261,7 @@ const ParentHome = ({ navigation }) => {
 
             // Listen for trip ended
             socket.on('trip_ended', () => {
+                setEtaText('Bus Not En Route');
                 setChildStatus(prev => {
                     if (!prev) return prev;
                     return {
@@ -230,6 +276,7 @@ const ParentHome = ({ navigation }) => {
             });
 
             socket.on('tripEnded', () => {
+                setEtaText('Bus Not En Route');
                 setChildStatus(prev => {
                     if (!prev) return prev;
                     return {
@@ -373,9 +420,8 @@ const ParentHome = ({ navigation }) => {
                             </View>
                         </View>
                         <Text style={styles.cardLabelText}>ESTIMATED ARRIVAL</Text>
-                        <Text style={styles.arrivalValue}>
-                            {childStatus?.routeInfo?.driverOnline ? childStatus.routeInfo.eta || '--' : '--'}
-                            <Text style={styles.unitText}>min</Text>
+                        <Text style={styles.arrivalValue} numberOfLines={1} adjustsFontSizeToFit>
+                            {etaText}
                         </Text>
                         <View style={styles.busInfo}>
                             <View style={styles.busBadge}>
@@ -421,21 +467,23 @@ const ParentHome = ({ navigation }) => {
                 </View>
 
                 {/* Announcement Card */}
-                {latestAnnouncement ? (
-                    <View style={[styles.announcementCard, latestAnnouncement.priority === 'urgent' && styles.urgentCard]}>
+                {(latestNotification || latestAnnouncement) ? (
+                    <View style={[styles.announcementCard, ((latestNotification || latestAnnouncement)?.priority === 'urgent') && styles.urgentCard]}>
                         <View style={styles.announcementHeader}>
                             <View style={styles.announcementTitleRow}>
                                 <MaterialIcons 
-                                    name={latestAnnouncement.priority === 'urgent' ? "priority-high" : "campaign"} 
+                                    name={((latestNotification || latestAnnouncement)?.priority === 'urgent') ? "priority-high" : "campaign"} 
                                     size={20} 
-                                    color={latestAnnouncement.priority === 'urgent' ? "#ef4444" : Theme.colors.primary} 
+                                    color={((latestNotification || latestAnnouncement)?.priority === 'urgent') ? "#ef4444" : Theme.colors.primary} 
                                 />
-                                <Text style={styles.announcementTitle}>{latestAnnouncement.title}</Text>
+                                <Text style={styles.announcementTitle}>
+                                    {(latestNotification || latestAnnouncement)?.title}
+                                </Text>
                             </View>
                             <View style={styles.tag}><Text style={styles.tagText}>New</Text></View>
                         </View>
                         <Text style={styles.announcementText} numberOfLines={3}>
-                            {latestAnnouncement.content}
+                            {(latestNotification || latestAnnouncement)?.message || (latestNotification || latestAnnouncement)?.content}
                         </Text>
                         <TouchableOpacity 
                             style={styles.detailsBtn}
@@ -446,7 +494,7 @@ const ParentHome = ({ navigation }) => {
                     </View>
                 ) : (
                     <View style={styles.announcementCard}>
-                         <Text style={[styles.announcementText, { textAlign: 'center', marginBottom: 0 }]}>No recent announcements.</Text>
+                         <Text style={[styles.announcementText, { textAlign: 'center', marginBottom: 0 }]}>No new announcements.</Text>
                     </View>
                 )}
             </ScrollView>

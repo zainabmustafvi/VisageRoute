@@ -14,9 +14,12 @@ const protect = (req, res, next) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Support both `id` and `userId` fields in JWT payload (migration-safe)
+        const userId = decoded._id || decoded.id || decoded.userId;
+
+        // Support _id, id, role, and email in req.user (normalized for all endpoints)
         req.user = {
-            id: decoded.id || decoded.userId,
+            _id: userId,
+            id: userId,
             role: decoded.role,
             email: decoded.email
         };
