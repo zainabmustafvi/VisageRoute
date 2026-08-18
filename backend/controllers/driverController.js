@@ -2,29 +2,19 @@ const Driver = require('../models/Driver');
 const BusRoute = require('../models/BusRoute');
 const Student = require('../models/Student');
 
-/**
- * Helper: find the logged-in driver's profile.
- * 
- * Strategy (migration-safe):
- *  1. Try ObjectId reference: Driver.user === req.user.id
- *  2. Fallback: Driver.email === req.user.email  (covers all legacy records)
- */
 const findDriverForUser = async (req) => {
     const userId = req.user?.id;
     const userEmail = req.user?.email;
 
     let driver = null;
 
-    // Primary: look up by ObjectId reference if the field is populated
     if (userId) {
         driver = await Driver.findOne({ user: userId });
     }
 
-    // Fallback: look up by matching email (works for ALL existing records)
     if (!driver && userEmail) {
         driver = await Driver.findOne({ email: userEmail.toLowerCase() });
 
-        // Auto-link the user field so future lookups use the faster ObjectId path
         if (driver && userId && !driver.user) {
             driver.user = userId;
             await driver.save();
@@ -34,9 +24,6 @@ const findDriverForUser = async (req) => {
     return driver;
 };
 
-// @desc    Get assigned route and manifest for the logged-in driver
-// @route   GET /api/driver/route
-// @access  Private/Driver
 const getAssignedRoute = async (req, res) => {
     try {
         const driver = await findDriverForUser(req);
@@ -78,9 +65,6 @@ const getAssignedRoute = async (req, res) => {
     }
 };
 
-// @desc    Get dashboard summary (Name, Bus Number, Trip Status)
-// @route   GET /api/driver/dashboard
-// @access  Private/Driver
 const getDashboardData = async (req, res) => {
     try {
         const driver = await Driver.findOne({ user: req.user.id }).populate('assignedBusId');
@@ -89,7 +73,6 @@ const getDashboardData = async (req, res) => {
             return res.status(404).json({ error: 'Driver profile not found. Please contact admin.' });
         }
 
-        // Populate bus details manually
         const Bus = require('../models/Bus');
         const bus = driver.assignedBusId ? await Bus.findById(driver.assignedBusId) : null;
 
@@ -112,9 +95,6 @@ const getDashboardData = async (req, res) => {
     }
 };
 
-// @desc    Update trip status (Online/Offline)
-// @route   PATCH /api/driver/trip-status
-// @access  Private/Driver
 const updateTripStatus = async (req, res) => {
     try {
         const { isOnline } = req.body;
@@ -137,9 +117,6 @@ const updateTripStatus = async (req, res) => {
     }
 };
 
-// @desc    Get full profile of the logged-in driver
-// @route   GET /api/driver/profile
-// @access  Private/Driver
 const getProfile = async (req, res) => {
     try {
         const driver = await Driver.findOne({ user: req.user.id }).populate('assignedBusId');
@@ -173,14 +150,10 @@ const getProfile = async (req, res) => {
     }
 };
 
-// @desc    Start trip and notify parents
-// @route   PATCH /api/driver/start-trip
-// @access  Private/Driver
 const startTrip = async (req, res) => {
     try {
         let { busID, driverID } = req.body;
 
-        // Fallback: extract from token/profile if body is missing
         if (!driverID || !busID) {
             const driver = await Driver.findOne({ user: req.user.id });
             if (driver) {
@@ -193,10 +166,8 @@ const startTrip = async (req, res) => {
             return res.status(400).json({ error: 'Driver profile or assigned bus not found.' });
         }
 
-        // 1. Update driver status ONLINE
         await Driver.findByIdAndUpdate(driverID, { isOnline: true, wentOnlineAt: new Date() });
 
-        // 2. Find ALL students on this bus
         const StudentModel = require('../models/Student');
         const students = await StudentModel.find({ busId: busID }).populate({
             path: 'parentId',
@@ -204,7 +175,6 @@ const startTrip = async (req, res) => {
             select: 'fcmToken notificationPreferences'
         });
 
-        // 3. Get bus number for message
         const Bus = require('../models/Bus');
         const bus = await Bus.findById(busID).select('busNumber');
 
@@ -212,7 +182,6 @@ const startTrip = async (req, res) => {
             return res.status(404).json({ error: 'Bus not found.' });
         }
 
-        // 4. Send FCM (non-blocking)
         try {
             const { sendNotification } = require('../services/fcmService');
             const notifications = students.map(student => {
@@ -226,12 +195,11 @@ const startTrip = async (req, res) => {
                     { type: 'trip_started', busID: busID.toString() }
                 );
             }).filter(Boolean);
-            Promise.allSettled(notifications); // fire-and-forget
+            Promise.allSettled(notifications);
         } catch (fcmErr) {
             console.error('FCM notification error:', fcmErr.message);
         }
 
-        // 5. Socket.io (non-blocking)
         try {
             const { getIo } = require('../config/socket');
             const io = getIo();
@@ -251,9 +219,6 @@ const startTrip = async (req, res) => {
     }
 };
 
-// @desc    Stop trip and notify parents
-// @route   PATCH /api/driver/stop-trip
-// @access  Private/Driver
 const stopTrip = async (req, res) => {
     try {
         let { busID, driverID } = req.body;
@@ -299,7 +264,7 @@ const stopTrip = async (req, res) => {
                     { type: 'trip_ended', busID: busID.toString() }
                 );
             }).filter(Boolean);
-            Promise.allSettled(notifications); // fire-and-forget
+            Promise.allSettled(notifications);
         } catch (fcmErr) {
             console.error('FCM notification error:', fcmErr.message);
         }

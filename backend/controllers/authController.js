@@ -5,14 +5,10 @@ const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const Driver = require('../models/Driver');
 
-// @desc    Admin/Driver/Parent Login
-// @route   POST /api/auth/login
-// @access  Public
 const login = async (req, res) => {
   try {
     const { email, password, role } = req.body;
 
-    // Strict Input Validation Schema (Zod)
     const loginSchema = z.object({
       email: z.string().email("Please enter a valid email address").toLowerCase(),
       password: z.string().min(6, "Password must be at least 6 characters"),
@@ -23,43 +19,37 @@ const login = async (req, res) => {
 
     const validated = loginSchema.parse({ email, password, role });
 
-    // Find User by email and matching lowercase role
     const user = await User.findOne({ 
       email: validated.email, 
       role: validated.role 
     });
 
     if (!user) {
-      // Security Feedback: Generic error to prevent user enumeration
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check Password
     const isMatch = await bcrypt.compare(validated.password, user.password);
 
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Generate JWT
     const token = jwt.sign(
       { userId: user._id, id: user._id, role: user.role, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
     );
 
-
-    // Security: Send token in HTTP-Only Cookie
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 30 * 60 * 1000 // 30 minutes
+      maxAge: 30 * 60 * 1000
     });
 
     const responseData = {
       message: 'Login successful',
-      token, // Bundled for React Native native store usage
+      token,
       user: {
         id: user._id,
         email: user.email,
@@ -67,7 +57,6 @@ const login = async (req, res) => {
       }
     };
 
-    // Keep existing sub-collection references intact using lowercase checks
     if (validated.role === 'driver') {
       const driver = await Driver.findOne({ user: user._id });
       if (driver) {
@@ -86,9 +75,6 @@ const login = async (req, res) => {
   }
 };
 
-// @desc    Request Password Reset Code (OTP)
-// @route   POST /api/auth/forgot-password
-// @access  Public
 const forgotPassword = async (req, res) => {
   try {
     const { email, role } = req.body;
@@ -103,28 +89,23 @@ const forgotPassword = async (req, res) => {
     const genericMessage = "If this email is registered, a reset code has been sent.";
 
     if (!user) {
-      // OWASP compliance: return 200 even if user doesn't exist
       return res.status(200).json({ message: genericMessage });
     }
 
-    // Generate 6-digit verification code
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Store hashed verification metrics
     user.resetCode = await bcrypt.hash(resetCode, 10);
-    user.resetCodeExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 Minute Window
-await user.save();
+    user.resetCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
 
-    // Nodemailer Mailtrap Sandbox Configuration
     const transporter = nodemailer.createTransport({
       host: process.env.MAILTRAP_HOST || 'sandbox.smtp.mailtrap.io',
-      port: Number(process.env.MAILTRAP_PORT) || 2525, // Explicitly cast port to a Number
+      port: Number(process.env.MAILTRAP_PORT) || 2525,
       secure: process.env.MAILTRAP_PORT === '465',
       auth: {
         user: process.env.MAILTRAP_USER,
         pass: process.env.MAILTRAP_PASS
       },
-      // Explicit timeouts to prevent ETIMEDOUT hangs on Railway
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 10000,
@@ -160,9 +141,6 @@ await user.save();
   }
 };
 
-// @desc    Reset Password with Validation Code
-// @route   POST /api/auth/reset-password
-// @access  Public
 const resetPassword = async (req, res) => {
   try {
     const { email, role, resetCode, newPassword } = req.body;
@@ -192,7 +170,6 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ error: "Incorrect reset code" });
     }
 
-    // Hash new password payload using project standards
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(validated.newPassword, salt);
 

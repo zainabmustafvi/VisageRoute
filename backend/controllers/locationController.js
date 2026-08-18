@@ -14,9 +14,6 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// @desc    Update bus location and broadcast
-// @route   POST /api/location/update
-// @access  Private/Driver
 const updateLocation = async (req, res) => {
     try {
         const { latitude, longitude, speed, accuracy, timestamp } = req.body;
@@ -46,7 +43,6 @@ const updateLocation = async (req, res) => {
         });
         await newLocation.save();
 
-        // Calculate ETA
         let eta = null;
         const assignment = await BusRouteAssignment.findOne({ busId: bus_id, isActive: true });
         if (assignment) {
@@ -63,7 +59,6 @@ const updateLocation = async (req, res) => {
                 }
             }
 
-            // Broadcast to bus room
             const io = getIo();
             const busRoom = `bus_${bus_id}`;
             io.to(busRoom).emit('bus_location_update', {
@@ -75,7 +70,6 @@ const updateLocation = async (req, res) => {
                 eta
             });
 
-            // Also broadcast to legacy route room
             const routeRoom = `route_${assignment.routeId}`;
             io.to(routeRoom).emit('locationUpdate', {
                 driverLocation: { lat: latitude, lng: longitude },
@@ -92,9 +86,6 @@ const updateLocation = async (req, res) => {
     }
 };
 
-// @desc    Get latest known location for a bus
-// @route   GET /api/location/latest/:busId
-// @access  Private
 const getLatestLocation = async (req, res) => {
     try {
         const { busId } = req.params;
@@ -107,7 +98,6 @@ const getLatestLocation = async (req, res) => {
             return res.status(404).json({ error: 'No location data found for this bus' });
         }
 
-        // Calculate ETA if route exists
         let eta = null;
         const assignment = await BusRouteAssignment.findOne({ busId, isActive: true });
         if (assignment) {

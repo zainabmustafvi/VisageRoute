@@ -5,13 +5,10 @@ const Driver = require('../models/Driver');
 const Student = require('../models/Student');
 const BusRouteAssignment = require('../models/BusRouteAssignment');
 
-// @desc    Send notification from Admin panel
-// @route   POST /api/admin/notifications (or /api/notifications)
-// @access  Private/Admin
 const sendNotification = async (req, res) => {
     try {
         const { title, message, content, targetRole, recipientId, recipients } = req.body;
-        const adminId = req.user?._id || req.user?.id; // Normalized ObjectId from authMiddleware
+        const adminId = req.user?._id || req.user?.id;
 
         const notifTitle = title;
         const notifMessage = message || content;
@@ -23,7 +20,6 @@ const sendNotification = async (req, res) => {
         let recipientUserIds = [];
 
         if (recipientId) {
-            // Direct recipient lookup by ObjectId (NOT legacy string IDs)
             const mongoose = require('mongoose');
             if (mongoose.Types.ObjectId.isValid(recipientId)) {
                 const user = await User.findById(recipientId);
@@ -41,14 +37,12 @@ const sendNotification = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Invalid recipient ID format.' });
             }
         } else if (targetRole) {
-            // Role-based notification (Parent, Driver, or All)
             const query = (targetRole === 'All' || targetRole === 'all')
                 ? { role: { $in: ['parent', 'driver'] } }
                 : { role: targetRole.toLowerCase() };
             const users = await User.find(query).select('_id');
             recipientUserIds = users.map(u => u._id);
         } else if (recipients && typeof recipients === 'object') {
-            // For announcement payload format { type: 'all' | 'route' | 'bus', targetId }
             if (recipients.type === 'all') {
                 const users = await User.find({ role: { $in: ['parent', 'driver'] } }).select('_id');
                 recipientUserIds = users.map(u => u._id);
@@ -84,7 +78,6 @@ const sendNotification = async (req, res) => {
             recipientUserIds = users.map(u => u._id);
         }
 
-        // Save Notification record
         const notification = await Notification.create({
             title: notifTitle,
             message: notifMessage,
@@ -95,7 +88,6 @@ const sendNotification = async (req, res) => {
             createdAt: new Date(),
         });
 
-        // Also save Announcement for backwards compatibility
         try {
             await Announcement.create({
                 adminId,
@@ -109,7 +101,6 @@ const sendNotification = async (req, res) => {
             console.error('Secondary Announcement creation error:', annErr.message);
         }
 
-        // Send via Socket.io & FCM Push Notifications
         try {
             const { sendToMultiple } = require('../services/fcmService');
             const targetUsers = await User.find({ _id: { $in: recipientUserIds } }).select('fcmToken');

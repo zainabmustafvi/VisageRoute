@@ -2,7 +2,6 @@ const { z } = require('zod');
 
 const idOrEmptyString = z.union([z.string().regex(/^[0-9a-fA-F]{24}$/), z.literal('')]).optional().nullable();
 
-// Schema for creating a student (strict — all required fields must be present)
 const studentCreateSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters").max(100).trim(),
     email: z.string().email("Invalid email format"),
@@ -13,8 +12,6 @@ const studentCreateSchema = z.object({
     department: z.string().optional(),
     routeId: idOrEmptyString,
     parentId: idOrEmptyString,
-    imageBase64: z.string().min(10).optional(),
-    faceEmbedding: z.array(z.number()).optional(),
     busId: idOrEmptyString,
     rollNo: z.string().optional(),
     year: z.string().optional(),
@@ -22,10 +19,8 @@ const studentCreateSchema = z.object({
     pickupPoint: z.string().optional(),
 });
 
-// Schema for updating a student — all fields optional
 const studentSchema = studentCreateSchema.partial();
 
-// Schema for creating a driver (strict)
 const driverCreateSchema = z.object({
     name: z.string().min(2).max(100).trim(),
     email: z.string().email("Invalid email format"),
@@ -38,7 +33,6 @@ const driverCreateSchema = z.object({
     assignedBusId: idOrEmptyString,
 });
 
-// Schema for updating a driver — all fields optional
 const driverSchema = driverCreateSchema.partial();
 
 const busSchema = z.object({
@@ -51,7 +45,6 @@ const busSchema = z.object({
     assignedStudents: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/)).optional(),
 });
 
-// Schema for creating/updating a bus route (path/schedule)
 const busRouteSchema = z.object({
     routeName: z.string().min(3).max(50).trim(),
     driverId: idOrEmptyString,
@@ -77,7 +70,6 @@ const assignBusDriverSchema = z.object({
     assignedBusId: idOrEmptyString,
 });
 
-// Generic Validation Middleware
 const validateSchema = (schema) => {
     return (req, res, next) => {
         try {
@@ -98,7 +90,6 @@ const validateSchema = (schema) => {
     };
 };
 
-// Schema for login validation
 const loginSchema = z.object({
     email: z.string().email("Enter a valid email address"),
     password: z.string().min(6, "Password must be at least 6 characters"),

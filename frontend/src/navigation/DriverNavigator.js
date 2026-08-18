@@ -3,7 +3,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DriverHome from '../screens/DriverHome';
 import DriverProfile from '../screens/DriverProfile';
-
 import DriverRoute from '../screens/DriverRoute';
 import Theme from '../theme/Theme';
 
@@ -21,7 +20,6 @@ const DriverNavigator = () => {
                     } else if (route.name === 'Profile') {
                         iconName = focused ? 'account' : 'account-outline';
                     } else if (route.name === 'Route & Bus') {
-
                         iconName = focused ? 'bus-clock' : 'bus-clock';
                     }
 
@@ -52,7 +50,6 @@ const DriverNavigator = () => {
         >
             <Tab.Screen name="Home" component={DriverHome} />
             <Tab.Screen name="Profile" component={DriverProfile} />
-
             <Tab.Screen name="Route & Bus" component={DriverRoute} />
         </Tab.Navigator>
     );

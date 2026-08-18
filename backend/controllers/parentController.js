@@ -5,9 +5,6 @@ const BusRouteAssignment = require('../models/BusRouteAssignment');
 const Announcement = require('../models/Announcement');
 const User = require('../models/User');
 
-// @desc    Get schedule for student linked to parent
-// @route   GET /api/parent/schedule
-// @access  Private/Parent
 const getStudentSchedule = async (req, res) => {
     try {
         const { studentId } = req.query;
@@ -26,7 +23,6 @@ const getStudentSchedule = async (req, res) => {
             .populate('busId', 'busNumber plateNumber')
             .populate('routeId', 'routeName');
 
-        // Fetch driver details
         const Driver = require('../models/Driver');
         const driver = await Driver.findOne({ assignedBusId: student.busId });
 
@@ -50,9 +46,6 @@ const getStudentSchedule = async (req, res) => {
     }
 };
 
-// @desc    Get announcements for parent
-// @route   GET /api/parent/announcements
-// @access  Private/Parent
 const getAnnouncements = async (req, res) => {
     try {
         const { studentId } = req.query;
@@ -75,7 +68,6 @@ const getAnnouncements = async (req, res) => {
             }
         }
 
-        // Fetch announcements matching criteria
         const announcements = await Announcement.find({
             isSent: true,
             $or: [
@@ -85,7 +77,6 @@ const getAnnouncements = async (req, res) => {
             ]
         }).sort({ createdAt: -1 });
 
-        // Map to include 'isRead' status for THIS user
         const result = announcements.map(ann => {
             const isRead = ann.readBy.some(r => r.userId.toString() === req.user.id.toString());
             return {
@@ -101,15 +92,11 @@ const getAnnouncements = async (req, res) => {
     }
 };
 
-// @desc    Mark announcement as read
-// @route   PUT /api/parent/announcements/:id/read
-// @access  Private/Parent
 const markAnnouncementRead = async (req, res) => {
     try {
         const announcement = await Announcement.findById(req.params.id);
         if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
 
-        // Check if already read
         const alreadyRead = announcement.readBy.some(r => r.userId.toString() === req.user.id.toString());
         if (!alreadyRead) {
             announcement.readBy.push({ userId: req.user.id });
@@ -122,9 +109,6 @@ const markAnnouncementRead = async (req, res) => {
     }
 };
 
-// @desc    Get child status for dashboard
-// @route   GET /api/parent/child-status
-// @access  Private/Parent
 const getChildStatus = async (req, res) => {
     try {
         const { studentId } = req.query;
@@ -137,10 +121,6 @@ const getChildStatus = async (req, res) => {
         }
 
         if (!student) return res.status(404).json({ error: 'No student found' });
-
-        const today = new Date().toISOString().split('T')[0];
-        const Attendance = require('../models/Attendance');
-        const attendance = await Attendance.findOne({ studentId: student._id, date: today });
 
         let driverOnline = false;
         let wentOnlineAt = null;
@@ -163,16 +143,14 @@ const getChildStatus = async (req, res) => {
             }
         }
 
-        // Calculate location/ETA if driver online
         let eta = null;
         let latestLocation = null;
         if (driverOnline && student.busId) {
             const LocationTracking = require('../models/LocationTracking');
             latestLocation = await LocationTracking.findOne({ busId: student.busId._id }).sort({ timestamp: -1 });
             if (latestLocation) {
-                // Calculate ETA from latest location using route stops
                 const BusRoute = require('../models/BusRoute');
-                const route = await BusRoute.findById(assignment?.routeId);
+                const route = await BusRoute.findById(routeId);
                 if (route && route.stops && route.stops.length > 0) {
                     const R = 6371;
                     let minDist = Infinity;
@@ -191,7 +169,6 @@ const getChildStatus = async (req, res) => {
                         eta = Math.round((minDist / 30) * 60);
                     }
                 } else {
-                    // Fallback: estimate 15 min if no route stops with coordinates
                     eta = 15;
                 }
             }
@@ -210,11 +187,7 @@ const getChildStatus = async (req, res) => {
                 name: driverRecord.name,
                 phone: driverRecord.phone
             } : null,
-            attendance: attendance ? {
-                status: attendance.status,
-                boardingTime: attendance.boardingTime,
-                alightingTime: attendance.alightingTime,
-            } : null,
+            attendance: null,
             routeInfo: {
                 driverOnline,
                 wentOnlineAt,
@@ -235,9 +208,6 @@ const getChildStatus = async (req, res) => {
     }
 };
 
-// @desc    Get parent profile details & children card information
-// @route   GET /api/parent/profile
-// @access  Private/Parent
 const getParentProfile = async (req, res) => {
     try {
         const students = await Student.find({ parentId: req.user.id }).populate('busId');
@@ -273,9 +243,6 @@ const getParentProfile = async (req, res) => {
     }
 };
 
-// @desc    Get parent notification preferences
-// @route   GET /api/parent/preferences
-// @access  Private/Parent
 const getPreferences = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
@@ -291,9 +258,6 @@ const getPreferences = async (req, res) => {
     }
 };
 
-// @desc    Update parent notification preferences
-// @route   PATCH /api/parent/preferences
-// @access  Private/Parent
 const updatePreferences = async (req, res) => {
     try {
         const { preference_key, value } = req.body;
@@ -318,9 +282,6 @@ const updatePreferences = async (req, res) => {
     }
 };
 
-// @desc    Mark all announcements read
-// @route   PUT /api/parent/announcements/read-all
-// @access  Private/Parent
 const markAllAnnouncementsRead = async (req, res) => {
     try {
         const student = await Student.findOne({ parentId: req.user.id });
@@ -359,9 +320,6 @@ const markAllAnnouncementsRead = async (req, res) => {
     }
 };
 
-// @desc    Update parent's FCM token
-// @route   PATCH /api/parent/fcm-token
-// @access  Private/Parent
 const updateFcmToken = async (req, res) => {
     try {
         const { fcmToken } = req.body;

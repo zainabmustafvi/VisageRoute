@@ -67,7 +67,6 @@ const AdminRegisterStudent = ({ navigation, route }) => {
 
 
 
-    // ─── Form Validation ──────────────────────────────────────────────
     const validateForm = () => {
         const newErrors = {};
         if (!fullName.trim()) newErrors.fullName = true;
@@ -86,7 +85,6 @@ const AdminRegisterStudent = ({ navigation, route }) => {
         return true;
     };
 
-    // ─── Submit Registration / Update ──────────────────────────────────
     const handleRegister = async () => {
         if (!validateForm()) return;
 
