@@ -8,6 +8,7 @@ const cookieParser = require('cookie-parser');
 const mongoSanitize = require('express-mongo-sanitize');
 const http = require('http');
 const { initSocket } = require('./config/socket');
+const { startKeepAlive } = require('./services/keepAliveService');
 
 const app = express();
 
@@ -17,9 +18,24 @@ const server = http.createServer(app);
 
 initSocket(server);
 
+// Lightweight Health Check Endpoint (Bypasses rate limiting for monitoring and keep-alive)
+const healthHandler = (req, res) => {
+  res.status(200).json({
+    status: 'online',
+    uptime: Number(process.uptime().toFixed(2)),
+    environment: process.env.ENVIRONMENT || (process.env.NODE_ENV === 'production' ? 'production' : 'local-port-forward'),
+    timestamp: new Date().toISOString()
+  });
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
+
 app.use(helmet());
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? process.env.CLIENT_URL : true,
+  origin: process.env.NODE_ENV === 'production' && process.env.CLIENT_URL && process.env.CLIENT_URL !== '*' 
+    ? process.env.CLIENT_URL.split(',').map(url => url.trim()) 
+    : true,
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -54,11 +70,17 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || '0.0.0.0';
 const MONGO_URI = process.env.MONGO_URI;
 
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('Connected to MongoDB Atlas');
-    server.listen(PORT, () => console.log(`Server and Socket.io running securely on port ${PORT}`));
+    server.listen(PORT, HOST, () => {
+      console.log(`Server and Socket.io running securely on http://${HOST}:${PORT}`);
+      startKeepAlive();
+    });
   })
   .catch((error) => console.error('MongoDB connection error:', error));
+
+
