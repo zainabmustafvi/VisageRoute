@@ -1,7 +1,7 @@
 # VisageRoute
 **Intelligent Bus Tracking & Management System**
 
-A secure, 3-module React Native mobile application for student transportation management. Built with a "Secure by Design" approach using JWT authentication, role-based access control, real-time GPS tracking via Socket.io, and AI-powered facial recognition attendance.
+A secure, 3-module React Native mobile application for student transportation management. Built with a "Secure by Design" approach using JWT authentication, role-based access control, real-time GPS tracking via Socket.io, and instant notification using FCM.
 
 ---
 
@@ -10,8 +10,8 @@ A secure, 3-module React Native mobile application for student transportation ma
 | Module | Users | Key Features |
 |--------|-------|-------------|
 | Admin  | Institute Staff | CRUD for students/drivers/buses, schedule upload, announcements |
-| Driver | Bus Drivers | Live GPS sharing, face-scan attendance, route view |
-| Parent | Student Parents | Real-time bus tracking (OSM), on-board status, notifications |
+| Driver | Bus Drivers | Live GPS sharing, profile view, route view |
+| Parent | Student Parents | Real-time bus tracking (OSM), View Bus Schedule,View Profile, notifications |
 
 ---
 
@@ -23,9 +23,7 @@ A secure, 3-module React Native mobile application for student transportation ma
 | Backend | Node.js + Express |
 | Database | MongoDB Atlas (M0 Free Tier) |
 | Real-time GPS | Socket.io |
-| Maps | react-native-maps + OpenStreetMap tiles |
-| Face Detection | react-native-vision-camera + Google ML Kit |
-| Face Recognition | TensorFlow Lite (MobileFaceNet — 128-d embeddings) |
+| Maps |leaflet + OpenStreetMap tiles |
 | Push Notifications | Firebase Cloud Messaging (FCM) |
 | Authentication | JWT (Role-Based: Admin / Driver / Parent) |
 | Security | bcrypt, Zod validation, express-rate-limit, OWASP |
@@ -53,7 +51,7 @@ VisageRoute/
 │   ├── middleware/             # Auth (JWT), rate-limit, validation
 │   ├── models/                # Mongoose schemas
 │   ├── routes/                # API route definitions
-│   ├── services/              # FCM, Socket.io, face matching
+│   ├── services/              # FCM, Socket.io, 
 │   ├── sockets/               # Socket.io event handlers
 │   └── utils/                 # ETA calc, embedding matcher
 │
@@ -110,10 +108,6 @@ Use code with caution.Trigger the crash: Open your APK app on the phone and make
 
 Analyze the output: Look for tags like AndroidRuntime, unknown, ReactNative, or SoLoader. The terminal will print a detailed Java stack trace pointing to the exact library or component that failed
 
-## (Removed) Face Recognition Flow
-
-The face recognition + face-scanned attendance feature has been removed from VisageRoute.
-
 
 ## Real-Time GPS Flow (Socket.io)
 
@@ -138,7 +132,6 @@ Parent app receives → updates OSM map marker smoothly
 - **Rate Limiting:** express-rate-limit on all endpoints (stricter on /login)
 - **Input Validation:** Zod schemas on all API inputs
 - **RBAC Middleware:** Role verified on every protected route
-- **Face Data:** Only 128-d embeddings stored — no raw images
 - **Keys:** All API keys in `.env` — never in client bundle
 - **OWASP:** NoSQL injection prevention via Mongoose strict casting
 
@@ -162,9 +155,6 @@ npm install
 cp .env.example .env        # set EXPO_PUBLIC_API_BASE_URL
 npx expo start
 ```
-
-> **Note:** the camera / face-scan features use native modules and **cannot run in Expo Go**.
-> Use `npx expo start` only for the non-camera screens, or build a real APK (see below).
 
 ---
 
@@ -225,9 +215,6 @@ sources". **Change the backend URL?** Re-run Step 1 + Step 2.
   keystore and reuse it.
 - **Size:** ~168 MB — it bundles all CPU architectures + the TFLite model. To shrink, use ABI
   splits or an `.aab` app bundle.
-- **Camera stack:** VisionCamera **v4** + `react-native-vision-camera-face-detector` +
-  `vision-camera-resize-plugin` v3 (required for React Native 0.83).
-
 ---
 
 ## Development Timeline
@@ -236,7 +223,7 @@ sources". **Change the backend URL?** Re-run Step 1 + Step 2.
 |-------|-------|-------|
 | Foundation | Month 1 | Auth, security baseline, UI setup |
 | Core Modules | Month 2 | Admin CRUD, driver APIs, validation, rate limiting |
-| Real-time & AI | Month 3 | GPS tracking, face recognition, FCM, security audit |
+| Real-time & AI | Month 3 | GPS tracking, FCM, security audit |
 
 ---
 

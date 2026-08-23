@@ -1,9 +1,9 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { z } = require('zod');
-const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const Driver = require('../models/Driver');
+const { sendPasswordResetEmail } = require('../utils/emailService');
 
 const login = async (req, res) => {
   try {
@@ -98,38 +98,7 @@ const forgotPassword = async (req, res) => {
     user.resetCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
     await user.save();
 
-    const transporter = nodemailer.createTransport({
-      host: process.env.MAILTRAP_HOST || 'sandbox.smtp.mailtrap.io',
-      port: Number(process.env.MAILTRAP_PORT) || 2525,
-      secure: process.env.MAILTRAP_PORT === '465',
-      auth: {
-        user: process.env.MAILTRAP_USER,
-        pass: process.env.MAILTRAP_PASS
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-
-    await transporter.sendMail({
-      from: '"VisageRoute Sandbox" <no-reply@visageroute.edu.pk>',
-      to: user.email,
-      subject: "VisageRoute — Password Reset Code",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 400px; padding: 20px; border: 1px solid #e8e4ce; border-radius: 8px;">
-          <h2 style="color: #f2cc0d; margin-bottom: 4px;">VisageRoute</h2>
-          <p style="color: #1c190d;">Dear User,</p>
-          <p style="color: #6b6651;">Your password reset verification code is:</p>
-          <h1 style="letter-spacing: 6px; color: #1c190d; background: #f8f8f5; text-align: center; padding: 12px; border-radius: 4px;">
-            ${resetCode}
-          </h1>
-          <p style="font-size: 12px; color: #ef4444;">This validation code expires in 15 minutes.</p>
-        </div>
-      `
-    });
+    await sendPasswordResetEmail(user.email, resetCode);
 
     return res.status(200).json({ message: genericMessage });
   } catch (err) {
