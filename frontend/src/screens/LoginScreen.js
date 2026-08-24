@@ -70,7 +70,7 @@ const LoginScreen = ({ navigation }) => {
                 <Text style={styles.logoText}>VisageRoute</Text>
                 
                 {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
-                {illegalCharWarning ? <Text style={styles.warningText}>Warning: Avoid potential system syntax characters ($, ., {'{', '}'})</Text> : null}
+               {illegalCharWarning ? <Text style={styles.warningText}>Warning: Avoid potential system syntax characters ($, ., '{', '}')</Text> : null}
 
                 {/* Role Toggles */}
                 <View style={styles.radioContainer}>
